@@ -15,16 +15,26 @@ public final class CultureAPIClient: Sendable {
     public let apiKey: String
     public let timeout: TimeInterval
 
+    // Dedicated session avoids the nw_connection stale-pool issue that hits
+    // URLSession.shared when multiple parallel requests fire on cellular.
+    private let session: URLSession
     private let logger = Logger(subsystem: "io.celyn.kit", category: "CultureAPIClient")
 
     public init(
         apiKey: String,
         baseURL: URL = URL(string: "https://celyn.io/api")!,
-        timeout: TimeInterval = 30
+        timeout: TimeInterval = 15
     ) {
         self.apiKey = apiKey
         self.baseURL = baseURL
         self.timeout = timeout
+
+        let config = URLSessionConfiguration.default
+        config.waitsForConnectivity = true
+        config.timeoutIntervalForRequest = timeout
+        config.timeoutIntervalForResource = timeout * 2
+        config.httpMaximumConnectionsPerHost = 4
+        self.session = URLSession(configuration: config)
     }
 
     /// True when an API key has been provided. Calling `get` without a key
@@ -60,7 +70,7 @@ public final class CultureAPIClient: Sendable {
         request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
         request.timeoutInterval = timeout
 
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await session.data(for: request)
         guard let http = response as? HTTPURLResponse else {
             throw CultureAPIError.invalidResponse
         }
