@@ -14,9 +14,5 @@ public struct OeuvresResource: Sendable {
         try await client.get("oeuvres/\(id)")
     }
 
-    public func opinions(id: String) async throws -> [OeuvreOpinion] {
-        struct Wrap: Decodable { let data: [OeuvreOpinion] }
-        let w: Wrap = try await client.get("oeuvres/\(id)/opinions")
-        return w.data
-    }
+    // Opinions are embedded in the detail response — use `get(id:)`.
 }

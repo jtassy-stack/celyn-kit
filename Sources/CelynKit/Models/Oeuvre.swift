@@ -16,6 +16,9 @@ public struct Oeuvre: Identifiable, Codable, Sendable, Equatable, Hashable {
     public let duration: Int?
     public let thematicTags: [String]?
     public let topics: [String]?
+    public let publisher: String?
+    public let opinions: [OeuvreOpinion]?
+    public let opinionCount: Int?
 }
 
 /// Lightweight oeuvre reference embedded in events / seances.
@@ -68,7 +71,10 @@ public extension OeuvreRef {
             ageMax: nil,
             duration: nil,
             thematicTags: nil,
-            topics: nil
+            topics: nil,
+            publisher: nil,
+            opinions: nil,
+            opinionCount: nil
         )
     }
 }
@@ -94,16 +100,20 @@ public extension Oeuvre {
     }
 }
 
-public struct OeuvreOpinion: Codable, Sendable, Equatable {
-    public let id: String
-    public let oeuvreId: String
-    public let source: String
-    public let sourceTitle: String?
-    public let quote: String
-    public let author: String?
+/// A critic's opinion sourced from a podcast/radio/YouTube segment.
+public struct OeuvreOpinion: Codable, Sendable, Equatable, Hashable {
+    public let criticName: String?
+    public let opinionSummary: String
     public let sentiment: Sentiment
+    public let keyQuotes: [String]?
+    public let episodeTitle: String?
+    public let showName: String?
+    public let station: String?
     public let publishedAt: Date?
-    public let url: String?
+    public let segmentStart: Int?
+    public let segmentEnd: Int?
+    public let audioUrl: String?
+    public let episodeId: String?
 }
 
 public struct OeuvreListResponse: Codable, Sendable {
