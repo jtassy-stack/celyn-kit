@@ -23,17 +23,21 @@ public final class CultureAPIClient: Sendable {
     public init(
         apiKey: String,
         baseURL: URL = URL(string: "https://celyn.io/api")!,
-        timeout: TimeInterval = 15
+        timeout: TimeInterval = 10
     ) {
         self.apiKey = apiKey
         self.baseURL = baseURL
         self.timeout = timeout
 
         let config = URLSessionConfiguration.default
-        config.waitsForConnectivity = true
+        // Don't wait indefinitely for connectivity — fail fast and let the
+        // caller surface an error rather than blocking for the full timeout.
+        config.waitsForConnectivity = false
         config.timeoutIntervalForRequest = timeout
         config.timeoutIntervalForResource = timeout * 2
-        config.httpMaximumConnectionsPerHost = 4
+        // Cap at 2 to avoid saturating the server with parallel TLS handshakes,
+        // which causes nw_endpoint_flow failures on cellular/weak wifi.
+        config.httpMaximumConnectionsPerHost = 2
         self.session = URLSession(configuration: config)
     }
 
@@ -69,6 +73,9 @@ public final class CultureAPIClient: Sendable {
         var request = URLRequest(url: url)
         request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
         request.timeoutInterval = timeout
+        // celyn.io doesn't support QUIC — skip the Connection refused + TLS
+        // fallback round-trip that adds ~200ms on every cold start.
+        request.assumesHTTP3Capable = false
 
         let (data, response) = try await session.data(for: request)
         guard let http = response as? HTTPURLResponse else {
