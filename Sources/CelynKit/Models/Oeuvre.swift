@@ -74,11 +74,23 @@ public extension OeuvreRef {
 }
 
 public extension Oeuvre {
+    /// True when we're confident the work suits a young audience.
+    ///
+    /// Scoped to types whose celyn-api kid metadata is reliable (livres,
+    /// films, podcasts, théâtre, opéra). Music (album / song) is excluded
+    /// because the API tags rap albums with "Programme scolaire" topics —
+    /// an explicit-content cover next to a "Enfants" badge is worse than no
+    /// badge at all.
     var isKidFriendly: Bool {
-        let kidTopics: Set<String> = ["scolaire", "programme scolaire", "enfants", "famille", "jeunesse", "kids", "family"]
-        if let topics, topics.contains(where: { kidTopics.contains($0.lowercased()) }) { return true }
-        if let max = ageMax, max <= 12 { return true }
-        return false
+        switch oeuvreType {
+        case .album, .song:
+            return false
+        default:
+            let kidTopics: Set<String> = ["scolaire", "programme scolaire", "enfants", "famille", "jeunesse", "kids", "family"]
+            if let topics, topics.contains(where: { kidTopics.contains($0.lowercased()) }) { return true }
+            if let max = ageMax, max <= 12 { return true }
+            return false
+        }
     }
 }
 

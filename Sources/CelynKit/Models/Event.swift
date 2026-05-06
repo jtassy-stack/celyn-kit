@@ -82,6 +82,13 @@ public extension Event {
     /// Checks topics for "scolaire" / "enfants" / "famille" keywords,
     /// then falls back to an age cap of 12.
     var isKidFriendly: Bool {
+        // Concert events inherit the same unreliable kid-tagging seen on rap
+        // albums — skip the badge for music to avoid an "Enfants" label next
+        // to explicit-content artists.
+        let cat = category.lowercased()
+        if cat == "concert" || cat == "concerts" || cat == "music" || cat == "musique" {
+            return false
+        }
         let kidTopics: Set<String> = ["scolaire", "programme scolaire", "enfants", "famille", "jeunesse", "kids", "family"]
         if let topics, topics.contains(where: { kidTopics.contains($0.lowercased()) }) { return true }
         if let max = ageMax, max <= 12 { return true }
