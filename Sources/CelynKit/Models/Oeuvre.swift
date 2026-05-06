@@ -47,6 +47,32 @@ public struct OeuvreRef: Codable, Sendable, Equatable {
     }
 }
 
+public extension OeuvreRef {
+    /// Promote a lightweight reference to a full Oeuvre using only the fields
+    /// available on the ref. Synopsis, topics, etc. will be missing — fine for
+    /// a detail screen that just shows what we already have.
+    func asOeuvre() -> Oeuvre? {
+        guard let id, let title else { return nil }
+        return Oeuvre(
+            id: id,
+            title: title,
+            originalTitle: nil,
+            oeuvreType: type ?? .film,
+            year: year,
+            director: director,
+            author: nil,
+            description: nil,
+            genres: genres,
+            imageUrl: imageUrl,
+            ageMin: nil,
+            ageMax: nil,
+            duration: nil,
+            thematicTags: nil,
+            topics: nil
+        )
+    }
+}
+
 public extension Oeuvre {
     var isKidFriendly: Bool {
         let kidTopics: Set<String> = ["scolaire", "programme scolaire", "enfants", "famille", "jeunesse", "kids", "family"]
