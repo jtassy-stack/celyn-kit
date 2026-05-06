@@ -31,6 +31,7 @@ public enum OeuvreType: String, Codable, Sendable, CaseIterable {
     case opera
     case dance
     case book
+    case podcast
     case game
     case artwork
     case monument

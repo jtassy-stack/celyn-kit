@@ -1,6 +1,6 @@
 import Foundation
 
-public struct Oeuvre: Identifiable, Codable, Sendable, Equatable {
+public struct Oeuvre: Identifiable, Codable, Sendable, Equatable, Hashable {
     public let id: String
     public let title: String
     public let originalTitle: String?
@@ -44,6 +44,15 @@ public struct OeuvreRef: Codable, Sendable, Equatable {
         self.year = year
         self.imageUrl = imageUrl
         self.genres = genres
+    }
+}
+
+public extension Oeuvre {
+    var isKidFriendly: Bool {
+        let kidTopics: Set<String> = ["scolaire", "programme scolaire", "enfants", "famille", "jeunesse", "kids", "family"]
+        if let topics, topics.contains(where: { kidTopics.contains($0.lowercased()) }) { return true }
+        if let max = ageMax, max <= 12 { return true }
+        return false
     }
 }
 

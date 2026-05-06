@@ -3,8 +3,9 @@ import Foundation
 public struct OeuvresResource: Sendable {
     let client: CultureAPIClient
 
-    public func list(limit: Int? = nil) async throws -> OeuvreListResponse {
+    public func list(type: OeuvreType? = nil, limit: Int? = nil) async throws -> OeuvreListResponse {
         var query: [String: String] = [:]
+        if let t = type { query["type"] = t.rawValue }
         if let l = limit { query["limit"] = String(l) }
         return try await client.get("oeuvres", query: query)
     }

@@ -77,4 +77,14 @@ public extension Event {
     var isFreeBool: Bool { (isFree ?? 0) == 1 }
     var isSoldOutBool: Bool { (isSoldOut ?? 0) == 1 }
     var isActiveBool: Bool { isActive == 1 }
+
+    /// True when the event is tagged for children or school programmes.
+    /// Checks topics for "scolaire" / "enfants" / "famille" keywords,
+    /// then falls back to an age cap of 12.
+    var isKidFriendly: Bool {
+        let kidTopics: Set<String> = ["scolaire", "programme scolaire", "enfants", "famille", "jeunesse", "kids", "family"]
+        if let topics, topics.contains(where: { kidTopics.contains($0.lowercased()) }) { return true }
+        if let max = ageMax, max <= 12 { return true }
+        return false
+    }
 }
