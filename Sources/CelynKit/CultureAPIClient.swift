@@ -23,7 +23,7 @@ public final class CultureAPIClient: Sendable {
     public init(
         apiKey: String,
         baseURL: URL = URL(string: "https://celyn.io/api")!,
-        timeout: TimeInterval = 10
+        timeout: TimeInterval = 15
     ) {
         self.apiKey = apiKey
         self.baseURL = baseURL
@@ -77,7 +77,9 @@ public final class CultureAPIClient: Sendable {
         // fallback round-trip that adds ~200ms on every cold start.
         request.assumesHTTP3Capable = false
 
-        let (data, response) = try await session.data(for: request)
+        // One-shot retry on transient network failures (timeouts, dropped TLS,
+        // network lost). celyn.io occasionally drops connections under load.
+        let (data, response) = try await Self.dataWithRetry(session: session, request: request, logger: logger)
         guard let http = response as? HTTPURLResponse else {
             throw CultureAPIError.invalidResponse
         }
@@ -106,6 +108,33 @@ public final class CultureAPIClient: Sendable {
             let body = String(data: data, encoding: .utf8) ?? ""
             logger.error("GET \(url.path) decode error: \(error) — body: \(body)")
             throw error
+        }
+    }
+
+    /// One retry after a short backoff for transient network errors.
+    /// Covers timeouts (-1001), connection lost (-1005), and DNS (-1003) —
+    /// the kinds of failures we see on celyn.io under parallel load.
+    private static func dataWithRetry(
+        session: URLSession,
+        request: URLRequest,
+        logger: Logger
+    ) async throws -> (Data, URLResponse) {
+        do {
+            return try await session.data(for: request)
+        } catch let error as URLError where Self.isTransient(error) {
+            logger.notice("retry transient \(error.code.rawValue) \(request.url?.path ?? "")")
+            try await Task.sleep(for: .milliseconds(400))
+            return try await session.data(for: request)
+        }
+    }
+
+    private static func isTransient(_ error: URLError) -> Bool {
+        switch error.code {
+        case .timedOut, .networkConnectionLost, .cannotConnectToHost,
+             .cannotFindHost, .dnsLookupFailed, .notConnectedToInternet:
+            return true
+        default:
+            return false
         }
     }
 }
