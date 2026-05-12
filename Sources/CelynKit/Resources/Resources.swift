@@ -6,4 +6,5 @@ public extension CultureAPIClient {
     var oeuvres: OeuvresResource { OeuvresResource(client: self) }
     var seances: SeancesResource { SeancesResource(client: self) }
     var recommendations: RecommendationsResource { RecommendationsResource(client: self) }
+    var podcasts: PodcastsResource { PodcastsResource(client: self) }
 }
