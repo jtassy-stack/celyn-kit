@@ -7,4 +7,5 @@ public extension CultureAPIClient {
     var seances: SeancesResource { SeancesResource(client: self) }
     var recommendations: RecommendationsResource { RecommendationsResource(client: self) }
     var podcasts: PodcastsResource { PodcastsResource(client: self) }
+    var embeddings: EmbeddingsResource { EmbeddingsResource(client: self) }
 }
