@@ -11,6 +11,10 @@ public struct Oeuvre: Identifiable, Codable, Sendable, Equatable, Hashable {
     public let description: String?
     public let genres: [String]?
     public let imageUrl: String?
+    /// Films / series only — official trailer URL (typically YouTube watch
+    /// URL) sourced from TMDB by culture-api's enrich-trailers job. NULL when
+    /// no trailer is available; consumers should fall back to a search.
+    public let trailerUrl: String?
     public let ageMin: Int?
     public let ageMax: Int?
     public let duration: Int?
@@ -67,6 +71,7 @@ public extension OeuvreRef {
             description: nil,
             genres: genres,
             imageUrl: imageUrl,
+            trailerUrl: nil,
             ageMin: nil,
             ageMax: nil,
             duration: nil,
