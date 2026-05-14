@@ -50,3 +50,39 @@ public struct PodcastSource: Identifiable, Codable, Sendable, Equatable, Hashabl
 public struct PodcastSourceListResponse: Codable, Sendable {
     public let data: [PodcastSource]
 }
+
+public extension PodcastSource {
+    /// Project a podcast / radio / YouTube source onto a synthetic Oeuvre
+    /// of type `.podcast` so it can flow through any pipeline designed for
+    /// Oeuvres (HomePickEngine, OeuvreDetailView, the home-pick cross-day
+    /// dedup, etc.) without a parallel code path.
+    ///
+    /// The id is namespaced with a `podcast-source-` prefix so the synth
+    /// can't collide with a real oeuvre id.
+    func asOeuvre() -> Oeuvre? {
+        let resolvedTitle = showName ?? name
+        guard !resolvedTitle.isEmpty else { return nil }
+        return Oeuvre(
+            id: "podcast-source-\(id)",
+            title: resolvedTitle,
+            originalTitle: nil,
+            oeuvreType: .podcast,
+            year: nil,
+            director: nil,
+            author: station,
+            description: nil,
+            genres: category.map { [$0] },
+            imageUrl: imageUrl,
+            trailerUrl: nil,
+            ageMin: nil,
+            ageMax: nil,
+            duration: nil,
+            thematicTags: nil,
+            topics: category.map { [$0] },
+            publisher: station,
+            isKidFriendly: nil,
+            opinions: nil,
+            opinionCount: nil
+        )
+    }
+}
