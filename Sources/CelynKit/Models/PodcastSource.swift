@@ -52,14 +52,29 @@ public struct PodcastSourceListResponse: Codable, Sendable {
 }
 
 public extension PodcastSource {
+    /// `sourceType` values that represent something a user can actually
+    /// listen to / watch. The /podcasts/sources endpoint also returns
+    /// signal-only sources (newsletters, institutional feeds like BnF,
+    /// research scrapers) that the LLM mention-extractor crawls for
+    /// reviews — those have no playable artifact and must not be surfaced
+    /// as "podcasts to consume" in the agenda.
+    private static let consumableSourceTypes: Set<String> = [
+        "podcast", "radio", "youtube"
+    ]
+
     /// Project a podcast / radio / YouTube source onto a synthetic Oeuvre
     /// of type `.podcast` so it can flow through any pipeline designed for
     /// Oeuvres (HomePickEngine, OeuvreDetailView, the home-pick cross-day
     /// dedup, etc.) without a parallel code path.
     ///
-    /// The id is namespaced with a `podcast-source-` prefix so the synth
-    /// can't collide with a real oeuvre id.
+    /// Returns nil when the source isn't user-consumable (newsletter,
+    /// institutional feed, research source). The id is namespaced with a
+    /// `podcast-source-` prefix so the synth can't collide with a real
+    /// oeuvre id.
     func asOeuvre() -> Oeuvre? {
+        guard Self.consumableSourceTypes.contains(sourceType.lowercased()) else {
+            return nil
+        }
         let resolvedTitle = showName ?? name
         guard !resolvedTitle.isEmpty else { return nil }
         return Oeuvre(
