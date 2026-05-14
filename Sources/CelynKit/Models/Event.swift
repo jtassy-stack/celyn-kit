@@ -23,6 +23,10 @@ public struct Event: Identifiable, Codable, Sendable, Equatable {
     public let topics: [String]?
     public let venue: VenueRef?
     public let oeuvre: OeuvreRef?
+    /// Authoritative server hint (see `Oeuvre.isKidFriendly`). `false`
+    /// explicitly vetoes the heuristic — needed because some adult concerts
+    /// arrive tagged with "scolaire" or "famille" topics by mistake.
+    public let isKidFriendly: Bool?
 
     public init(
         id: String,
@@ -43,7 +47,8 @@ public struct Event: Identifiable, Codable, Sendable, Equatable {
         ageMax: Int? = nil,
         topics: [String]? = nil,
         venue: VenueRef? = nil,
-        oeuvre: OeuvreRef? = nil
+        oeuvre: OeuvreRef? = nil,
+        isKidFriendly: Bool? = nil
     ) {
         self.id = id
         self.title = title
@@ -64,6 +69,7 @@ public struct Event: Identifiable, Codable, Sendable, Equatable {
         self.topics = topics
         self.venue = venue
         self.oeuvre = oeuvre
+        self.isKidFriendly = isKidFriendly
     }
 }
 
@@ -79,9 +85,13 @@ public extension Event {
     var isActiveBool: Bool { isActive == 1 }
 
     /// True when the event is tagged for children or school programmes.
-    /// Checks topics for "scolaire" / "enfants" / "famille" keywords,
-    /// then falls back to an age cap of 12.
-    var isKidFriendly: Bool {
+    ///
+    /// Two-step gate (same model as `Oeuvre.effectiveIsKidFriendly`):
+    /// 1. Honour the explicit server hint (`isKidFriendly`) when present —
+    ///    `false` is an authoritative veto.
+    /// 2. Otherwise fall back to the on-device heuristic on topics + age cap.
+    var effectiveIsKidFriendly: Bool {
+        if let server = isKidFriendly { return server }
         // Concert events inherit the same unreliable kid-tagging seen on rap
         // albums — skip the badge for music to avoid an "Enfants" label next
         // to explicit-content artists.
