@@ -8,4 +8,5 @@ public extension CultureAPIClient {
     var recommendations: RecommendationsResource { RecommendationsResource(client: self) }
     var podcasts: PodcastsResource { PodcastsResource(client: self) }
     var embeddings: EmbeddingsResource { EmbeddingsResource(client: self) }
+    var creators: CreatorsResource { CreatorsResource(client: self) }
 }
