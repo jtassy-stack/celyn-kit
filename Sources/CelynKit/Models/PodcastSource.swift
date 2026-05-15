@@ -72,13 +72,20 @@ public extension PodcastSource {
     /// `podcast-source-` prefix so the synth can't collide with a real
     /// oeuvre id.
     func asOeuvre() -> Oeuvre? {
-        guard Self.consumableSourceTypes.contains(sourceType.lowercased()) else {
+        let type = sourceType.lowercased()
+        guard Self.consumableSourceTypes.contains(type) else {
             return nil
         }
         let resolvedTitle = showName ?? name
         guard !resolvedTitle.isEmpty else { return nil }
+        let isYouTube = type == "youtube"
+        // YouTube channels are not podcasts: namespace the synthetic id so
+        // the UI can relabel them and surface a "voir la chaîne" link. The
+        // /podcasts/sources RSS for a channel is
+        // youtube.com/feeds/videos.xml?channel_id=UC… — derive the watchable
+        // channel URL from it; nil when the feed isn't a channel feed.
         return Oeuvre(
-            id: "podcast-source-\(id)",
+            id: isYouTube ? "youtube-source-\(id)" : "podcast-source-\(id)",
             title: resolvedTitle,
             originalTitle: nil,
             oeuvreType: .podcast,
@@ -88,7 +95,7 @@ public extension PodcastSource {
             description: nil,
             genres: category.map { [$0] },
             imageUrl: imageUrl,
-            trailerUrl: nil,
+            trailerUrl: isYouTube ? Self.youTubeChannelURL(fromFeed: rssUrl) : nil,
             ageMin: nil,
             ageMax: nil,
             duration: nil,
@@ -100,4 +107,25 @@ public extension PodcastSource {
             opinionCount: nil
         )
     }
+
+    /// Turn a YouTube channel RSS feed
+    /// (`https://www.youtube.com/feeds/videos.xml?channel_id=UC…`) into the
+    /// human channel URL (`https://www.youtube.com/channel/UC…`). Returns
+    /// nil for non-channel feeds so callers can fall back gracefully.
+    static func youTubeChannelURL(fromFeed feed: String?) -> String? {
+        guard let feed,
+              let comps = URLComponents(string: feed),
+              let channelId = comps.queryItems?
+                .first(where: { $0.name == "channel_id" })?.value,
+              !channelId.isEmpty
+        else { return nil }
+        return "https://www.youtube.com/channel/\(channelId)"
+    }
+}
+
+public extension Oeuvre {
+    /// True when this Oeuvre is a synthetic projection of a YouTube channel
+    /// source (see `PodcastSource.asOeuvre()`), not a real podcast. UI uses
+    /// this to relabel "podcast" → "YouTube" and offer a channel link.
+    var isYouTubeSource: Bool { id.hasPrefix("youtube-source-") }
 }
