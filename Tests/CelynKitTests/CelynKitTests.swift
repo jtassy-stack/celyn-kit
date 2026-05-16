@@ -105,4 +105,44 @@ final class CelynKitTests: XCTestCase {
         XCTAssertFalse(response.data.first?.isFreeBool ?? true)
         XCTAssertTrue(response.data.first?.isActiveBool ?? false)
     }
+
+    // MARK: - PodcastEpisode.asOeuvre()
+
+    private func episode(
+        audioUrl: String? = "https://cdn.example.com/ep.mp3",
+        sourceType: String? = "podcast",
+        title: String = "Épisode 42"
+    ) -> PodcastEpisode {
+        PodcastEpisode(
+            id: "ep42", title: title, description: "desc",
+            audioUrl: audioUrl, durationSeconds: 3600,
+            author: "France Inter", showName: "Le Masque",
+            station: "France Inter", category: "culture",
+            coverUrl: "https://cdn.example.com/c.jpg", sourceType: sourceType
+        )
+    }
+
+    func testEpisodeProjectsToPlayablePodcastOeuvre() {
+        let o = episode().asOeuvre()
+        XCTAssertEqual(o?.id, "podcast-episode-ep42")
+        XCTAssertEqual(o?.oeuvreType, .podcast)
+        XCTAssertEqual(o?.trailerUrl, "https://cdn.example.com/ep.mp3")
+        XCTAssertEqual(o?.author, "Le Masque")          // showName preferred
+        XCTAssertEqual(o?.duration, 60)                  // 3600s → 60 min
+        XCTAssertEqual(o?.isPodcastEpisode, true)
+    }
+
+    func testEpisodeWithoutAudioIsDropped() {
+        XCTAssertNil(episode(audioUrl: nil).asOeuvre())
+        XCTAssertNil(episode(audioUrl: "").asOeuvre())
+    }
+
+    func testNonAudioSourceIsDropped() {
+        XCTAssertNil(episode(sourceType: "youtube").asOeuvre())
+        XCTAssertNil(episode(sourceType: nil).asOeuvre())
+    }
+
+    func testRadioCountsAsAudio() {
+        XCTAssertNotNil(episode(sourceType: "radio").asOeuvre())
+    }
 }

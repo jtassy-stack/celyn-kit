@@ -11,13 +11,13 @@ public struct PodcastsResource: Sendable {
         return try await client.get("podcasts/sources", query: query)
     }
 
-    /// `GET /podcasts/episodes?source_id=...&limit=N` — list recent episodes
-    /// for a source, newest first. Use `limit: 1` to get just the latest.
-    public func episodes(sourceId: String, limit: Int = 20) async throws -> PodcastEpisodeListResponse {
-        let query: [String: String] = [
-            "source_id": sourceId,
-            "limit": String(limit),
-        ]
+    /// `GET /podcasts/episodes?source_id=...&limit=N` — recent episodes,
+    /// newest first. Omit `sourceId` for the global latest-episodes feed
+    /// across every source; pass it (with `limit: 1`) for just one source's
+    /// latest.
+    public func episodes(sourceId: String? = nil, limit: Int = 20) async throws -> PodcastEpisodeListResponse {
+        var query: [String: String] = ["limit": String(limit)]
+        if let sourceId { query["source_id"] = sourceId }
         return try await client.get("podcasts/episodes", query: query)
     }
 }

@@ -51,3 +51,58 @@ public struct PodcastEpisode: Identifiable, Codable, Sendable, Equatable, Hashab
 public struct PodcastEpisodeListResponse: Codable, Sendable {
     public let data: [PodcastEpisode]
 }
+
+public extension PodcastEpisode {
+    /// Source types that are actual streamable audio. The episodes feed
+    /// also surfaces YouTube/newsletter signal items — those have no audio
+    /// stream, so projecting them as playable podcasts would be a silent
+    /// dead end (cf. the #4 YouTube relabel).
+    private static let audioSourceTypes: Set<String> = ["podcast", "radio"]
+
+    /// Project a recent episode onto a synthetic `.podcast` Oeuvre so it
+    /// flows through the same HomePickEngine → Agenda pipeline as books /
+    /// albums / films. The id is namespaced `podcast-episode-` so it can't
+    /// collide with a real oeuvre (or a `podcast-source-` synth).
+    ///
+    /// Returns nil unless the episode is genuinely playable — a valid
+    /// audio URL on an audio source — so an un-listenable card never
+    /// reaches the feed.
+    func asOeuvre() -> Oeuvre? {
+        guard let type = sourceType?.lowercased(),
+              Self.audioSourceTypes.contains(type),
+              let audio = audioUrl, URL(string: audio) != nil,
+              !title.isEmpty else { return nil }
+        let credit = showName ?? station ?? author
+        return Oeuvre(
+            id: "podcast-episode-\(id)",
+            title: title,
+            originalTitle: nil,
+            oeuvreType: .podcast,
+            year: nil,
+            director: nil,
+            author: credit,
+            description: description,
+            genres: category.map { [$0] },
+            imageUrl: coverUrl,
+            // trailerUrl is the codebase's generic media-URL carrier (see
+            // the YouTube-channel projection); the episode player reads it.
+            trailerUrl: audio,
+            ageMin: nil,
+            ageMax: nil,
+            duration: durationSeconds.map { max(1, $0 / 60) },
+            thematicTags: nil,
+            topics: category.map { [$0] },
+            publisher: station,
+            isKidFriendly: nil,
+            opinions: nil,
+            opinionCount: nil
+        )
+    }
+}
+
+public extension Oeuvre {
+    /// True when this Oeuvre is a synthetic projection of a fresh podcast
+    /// episode (see `PodcastEpisode.asOeuvre()`). Drives the "Écouter
+    /// l'épisode" affordance and keeps it distinct from a YouTube source.
+    var isPodcastEpisode: Bool { id.hasPrefix("podcast-episode-") }
+}
