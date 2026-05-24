@@ -111,6 +111,65 @@ public final class CultureAPIClient: Sendable {
         }
     }
 
+    /// Performs a POST with a JSON body and decodes the response. Mirrors
+    /// `get` for headers, retries, and decoding strategy. No retry on the
+    /// transport error itself — POSTs aren't idempotent at the request
+    /// layer and a duplicate insert is worse than surfacing the failure.
+    public func post<Req: Encodable, Res: Decodable>(
+        _ path: String,
+        body: Req
+    ) async throws -> Res {
+        guard !apiKey.isEmpty else {
+            throw CultureAPIError.missingAPIKey
+        }
+
+        let sanitized = path.hasPrefix("/") ? String(path.dropFirst()) : path
+        let url = baseURL.appendingPathComponent(sanitized)
+
+        let encoder = JSONEncoder()
+        encoder.keyEncodingStrategy = .convertToSnakeCase
+        let payload = try encoder.encode(body)
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.httpBody = payload
+        request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.timeoutInterval = timeout
+        request.assumesHTTP3Capable = false
+
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse else {
+            throw CultureAPIError.invalidResponse
+        }
+
+        guard (200..<300).contains(http.statusCode) else {
+            let body = String(data: data, encoding: .utf8) ?? ""
+            logger.error("POST \(url.path) → \(http.statusCode): \(body)")
+            throw CultureAPIError.httpError(statusCode: http.statusCode, body: body)
+        }
+
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .custom { decoder in
+            let container = try decoder.singleValueContainer()
+            let str = try container.decode(String.self)
+            if let date = CultureAPIDateParsing.parse(str) { return date }
+            throw DecodingError.dataCorruptedError(
+                in: container,
+                debugDescription: "Cannot parse date string '\(str)'"
+            )
+        }
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+
+        do {
+            return try decoder.decode(Res.self, from: data)
+        } catch {
+            let body = String(data: data, encoding: .utf8) ?? ""
+            logger.error("POST \(url.path) decode error: \(error) — body: \(body)")
+            throw error
+        }
+    }
+
     /// One retry after a short backoff for transient network errors.
     /// Covers timeouts (-1001), connection lost (-1005), and DNS (-1003) —
     /// the kinds of failures we see on celyn.io under parallel load.
