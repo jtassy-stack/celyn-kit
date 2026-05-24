@@ -29,11 +29,27 @@ public enum CultureAPIDateParsing {
         return f
     }()
 
+    /// PostgreSQL DATE columns ship as bare `YYYY-MM-DD`. Parsed at noon UTC
+    /// (rather than midnight) so re-rendering in any local timezone still
+    /// resolves to the intended calendar day — a midnight UTC anchor would
+    /// flip back one day under Europe/Paris (UTC+1/+2).
+    static let dateOnly: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd"
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.timeZone = TimeZone(secondsFromGMT: 0)
+        return f
+    }()
+
     public static func parse(_ string: String) -> Date? {
         if let date = iso8601.date(from: string)
             ?? iso8601Fractional.date(from: string)
             ?? postgres.date(from: string) {
             return date
+        }
+        if let dateMidnight = dateOnly.date(from: string) {
+            // Anchor at noon UTC for timezone-safe display.
+            return dateMidnight.addingTimeInterval(12 * 3600)
         }
         logger.warning("Failed to parse date string: '\(string)'")
         return nil

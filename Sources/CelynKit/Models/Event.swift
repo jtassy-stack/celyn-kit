@@ -27,6 +27,14 @@ public struct Event: Identifiable, Codable, Sendable, Equatable {
     /// explicitly vetoes the heuristic — needed because some adult concerts
     /// arrive tagged with "scolaire" or "famille" topics by mistake.
     public let isKidFriendly: Bool?
+    /// FK to the parent festival *edition* (i.e. one year of a festival —
+    /// Cannes 2026, not the abstract "Cannes" oeuvre) when this event is
+    /// part of a multi-day cluster. `nil` for autonomous events. The
+    /// matching `FestivalRef` is also inlined as `festival` to avoid a
+    /// second fetch on list surfaces.
+    public let festivalEditionId: String?
+    /// Lightweight festival reference. Present iff `festivalEditionId` is non-nil.
+    public let festival: FestivalRef?
 
     public init(
         id: String,
@@ -48,7 +56,9 @@ public struct Event: Identifiable, Codable, Sendable, Equatable {
         topics: [String]? = nil,
         venue: VenueRef? = nil,
         oeuvre: OeuvreRef? = nil,
-        isKidFriendly: Bool? = nil
+        isKidFriendly: Bool? = nil,
+        festivalEditionId: String? = nil,
+        festival: FestivalRef? = nil
     ) {
         self.id = id
         self.title = title
@@ -70,6 +80,8 @@ public struct Event: Identifiable, Codable, Sendable, Equatable {
         self.venue = venue
         self.oeuvre = oeuvre
         self.isKidFriendly = isKidFriendly
+        self.festivalEditionId = festivalEditionId
+        self.festival = festival
     }
 }
 
