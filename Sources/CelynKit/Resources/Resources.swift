@@ -10,5 +10,6 @@ public extension CultureAPIClient {
     var embeddings: EmbeddingsResource { EmbeddingsResource(client: self) }
     var creators: CreatorsResource { CreatorsResource(client: self) }
     var venueSubmissions: VenueSubmissionsResource { VenueSubmissionsResource(client: self) }
+    var eventSubmissions: EventSubmissionsResource { EventSubmissionsResource(client: self) }
     var festivals: FestivalsResource { FestivalsResource(client: self) }
 }
