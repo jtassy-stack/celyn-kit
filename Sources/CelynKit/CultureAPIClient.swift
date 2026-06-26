@@ -15,6 +15,11 @@ public final class CultureAPIClient: Sendable {
     public let apiKey: String
     public let timeout: TimeInterval
 
+    /// Supplies the current end-user session token (phone-auth). Read per
+    /// request so login/logout take effect without rebuilding the client; nil
+    /// or empty → no `Authorization` header (anonymous, x-api-key only).
+    private let bearerProvider: (@Sendable () -> String?)?
+
     // Dedicated session avoids the nw_connection stale-pool issue that hits
     // URLSession.shared when multiple parallel requests fire on cellular.
     private let session: URLSession
@@ -23,11 +28,13 @@ public final class CultureAPIClient: Sendable {
     public init(
         apiKey: String,
         baseURL: URL = URL(string: "https://celyn.io/api")!,
-        timeout: TimeInterval = 15
+        timeout: TimeInterval = 15,
+        bearerProvider: (@Sendable () -> String?)? = nil
     ) {
         self.apiKey = apiKey
         self.baseURL = baseURL
         self.timeout = timeout
+        self.bearerProvider = bearerProvider
 
         let config = URLSessionConfiguration.default
         // Don't wait indefinitely for connectivity — fail fast and let the
@@ -72,6 +79,9 @@ public final class CultureAPIClient: Sendable {
 
         var request = URLRequest(url: url)
         request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
+        if let token = bearerProvider?(), !token.isEmpty {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
         request.timeoutInterval = timeout
         // celyn.io doesn't support QUIC — skip the Connection refused + TLS
         // fallback round-trip that adds ~200ms on every cold start.
@@ -134,6 +144,9 @@ public final class CultureAPIClient: Sendable {
         request.httpMethod = "POST"
         request.httpBody = payload
         request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
+        if let token = bearerProvider?(), !token.isEmpty {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.timeoutInterval = timeout
         request.assumesHTTP3Capable = false
