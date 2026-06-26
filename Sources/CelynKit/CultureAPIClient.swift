@@ -9,6 +9,8 @@ import os
 /// JSON decoding runs off the main thread on the cooperative pool (the `get`
 /// method is `nonisolated async`). Dates accept ISO8601, fractional ISO8601,
 /// or PostgreSQL timestamp formats via `CultureAPIDateParsing.parse`.
+private struct CKEmptyBody: Encodable {}
+
 public final class CultureAPIClient: Sendable {
 
     public let baseURL: URL
@@ -121,11 +123,34 @@ public final class CultureAPIClient: Sendable {
         }
     }
 
-    /// Performs a POST with a JSON body and decodes the response. Mirrors
-    /// `get` for headers, retries, and decoding strategy. No retry on the
-    /// transport error itself — POSTs aren't idempotent at the request
-    /// layer and a duplicate insert is worse than surfacing the failure.
+    /// Performs a POST with a JSON body and decodes the response.
     public func post<Req: Encodable, Res: Decodable>(
+        _ path: String,
+        body: Req
+    ) async throws -> Res {
+        try await sendBody("POST", path, body: body)
+    }
+
+    /// Performs a PUT with a JSON body and decodes the response. Used for
+    /// idempotent upserts (e.g. /me/sync).
+    public func put<Req: Encodable, Res: Decodable>(
+        _ path: String,
+        body: Req
+    ) async throws -> Res {
+        try await sendBody("PUT", path, body: body)
+    }
+
+    /// Performs a DELETE and decodes the response. Sends an empty JSON body
+    /// (harmless; the server ignores it) so it can share the body-request path.
+    public func delete<Res: Decodable>(_ path: String) async throws -> Res {
+        try await sendBody("DELETE", path, body: CKEmptyBody())
+    }
+
+    /// Shared body-request impl. Mirrors `get` for headers and decoding. No
+    /// retry on the transport error itself — a duplicate write is worse than
+    /// surfacing the failure.
+    private func sendBody<Req: Encodable, Res: Decodable>(
+        _ method: String,
         _ path: String,
         body: Req
     ) async throws -> Res {
@@ -141,7 +166,7 @@ public final class CultureAPIClient: Sendable {
         let payload = try encoder.encode(body)
 
         var request = URLRequest(url: url)
-        request.httpMethod = "POST"
+        request.httpMethod = method
         request.httpBody = payload
         request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
         if let token = bearerProvider?(), !token.isEmpty {
@@ -158,7 +183,7 @@ public final class CultureAPIClient: Sendable {
 
         guard (200..<300).contains(http.statusCode) else {
             let body = String(data: data, encoding: .utf8) ?? ""
-            logger.error("POST \(url.path) → \(http.statusCode): \(body)")
+            logger.error("\(method) \(url.path) → \(http.statusCode): \(body)")
             throw CultureAPIError.httpError(statusCode: http.statusCode, body: body)
         }
 
@@ -178,7 +203,7 @@ public final class CultureAPIClient: Sendable {
             return try decoder.decode(Res.self, from: data)
         } catch {
             let body = String(data: data, encoding: .utf8) ?? ""
-            logger.error("POST \(url.path) decode error: \(error) — body: \(body)")
+            logger.error("\(method) \(url.path) decode error: \(error) — body: \(body)")
             throw error
         }
     }
