@@ -102,6 +102,18 @@ public final class CultureAPIClient: Sendable {
             throw CultureAPIError.httpError(statusCode: http.statusCode, body: body)
         }
 
+        do {
+            return try Self.jsonDecoder().decode(T.self, from: data)
+        } catch {
+            let body = String(data: data, encoding: .utf8) ?? ""
+            logger.error("GET \(url.path) decode error: \(error) — body: \(body)")
+            throw error
+        }
+    }
+
+    /// JSON decoder configured for the API's wire format (custom date parsing +
+    /// snake_case → camelCase). Shared by `get` and `getPublic`.
+    private static func jsonDecoder() -> JSONDecoder {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .custom { decoder in
             let container = try decoder.singleValueContainer()
@@ -113,9 +125,50 @@ public final class CultureAPIClient: Sendable {
             )
         }
         decoder.keyDecodingStrategy = .convertFromSnakeCase
+        return decoder
+    }
 
+    /// Host-root (no `/api`) base for the public, un-authenticated feeds mounted
+    /// outside `/api/*` — currently the embeddings + curator sync. Derived from
+    /// `baseURL` so a custom base (tests, staging) carries through.
+    private var publicBaseURL: URL { baseURL.deletingLastPathComponent() }
+
+    /// GET a public endpoint (mounted at the host root, e.g.
+    /// `/public/embeddings/...`). No `x-api-key` is required — these feeds are
+    /// identical for every caller and edge-cached. Same decoding + retry as `get`.
+    public func getPublic<T: Decodable>(
+        _ path: String,
+        query: [String: String] = [:]
+    ) async throws -> T {
+        let sanitized = path.hasPrefix("/") ? String(path.dropFirst()) : path
+        guard var components = URLComponents(
+            url: publicBaseURL.appendingPathComponent(sanitized),
+            resolvingAgainstBaseURL: false
+        ) else {
+            throw CultureAPIError.invalidResponse
+        }
+        if !query.isEmpty {
+            components.queryItems = query.map { URLQueryItem(name: $0.key, value: $0.value) }
+        }
+        guard let url = components.url else {
+            throw CultureAPIError.invalidResponse
+        }
+
+        var request = URLRequest(url: url)
+        request.timeoutInterval = timeout
+        request.assumesHTTP3Capable = false
+
+        let (data, response) = try await Self.dataWithRetry(session: session, request: request, logger: logger)
+        guard let http = response as? HTTPURLResponse else {
+            throw CultureAPIError.invalidResponse
+        }
+        guard (200..<300).contains(http.statusCode) else {
+            let body = String(data: data, encoding: .utf8) ?? ""
+            logger.error("GET \(url.path) → \(http.statusCode): \(body)")
+            throw CultureAPIError.httpError(statusCode: http.statusCode, body: body)
+        }
         do {
-            return try decoder.decode(T.self, from: data)
+            return try Self.jsonDecoder().decode(T.self, from: data)
         } catch {
             let body = String(data: data, encoding: .utf8) ?? ""
             logger.error("GET \(url.path) decode error: \(error) — body: \(body)")

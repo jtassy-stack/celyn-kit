@@ -16,6 +16,9 @@ public struct CurationFeedItem: Codable, Sendable, Identifiable {
     public let opinionCount: Int?
     public let voices: [CurationFeedVoice]?
     public let explainer: String?
+    /// Editorial score from the server's press-ranking (higher = more
+    /// discussed). The on-device taste-rank uses it as the editorial spine `E`.
+    public let score: Double?
 
     public var id: String { oeuvre.id }
 }
@@ -40,4 +43,7 @@ public struct CurationFeedVoice: Codable, Sendable {
     /// "positif" | "mitige" | "negatif"
     public let sentiment: String
     public let quote: String?
+    /// signal_source id behind this voice — keys into the on-device curator
+    /// taste vectors for user↔curator affinity. Null for legacy episode rows.
+    public let sourceId: String?
 }
