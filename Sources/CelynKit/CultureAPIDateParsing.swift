@@ -42,8 +42,15 @@ public enum CultureAPIDateParsing {
     }()
 
     public static func parse(_ string: String) -> Date? {
-        if let date = iso8601.date(from: string)
-            ?? iso8601Fractional.date(from: string)
+        // Fractional FIRST: the server is Drizzle `timestamp` serialised with
+        // toISOString(), so it always emits `.000Z`. The non-fractional
+        // formatter therefore missed on ~100% of real payloads while still
+        // paying full parse cost — on the order of 6 date fields × 560 events
+        // per cold agenda load. The two formatters accept disjoint inputs
+        // (`.withFractionalSeconds` requires the fraction), so the order
+        // cannot change which Date comes back.
+        if let date = iso8601Fractional.date(from: string)
+            ?? iso8601.date(from: string)
             ?? postgres.date(from: string) {
             return date
         }

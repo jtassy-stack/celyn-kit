@@ -262,8 +262,17 @@ public final class CultureAPIClient: Sendable {
     }
 
     /// One retry after a short backoff for transient network errors.
-    /// Covers timeouts (-1001), connection lost (-1005), and DNS (-1003) —
-    /// the kinds of failures we see on celyn.io under parallel load.
+    /// Covers connection lost (-1005) and DNS (-1003) — the kinds of failures
+    /// we see on celyn.io under parallel load.
+    ///
+    /// Deliberately NOT timeouts. A timeout means the server took longer than
+    /// `timeout` seconds, and celyn.io's slow endpoints are slow in the tens of
+    /// seconds (p95 25s on /events, 33.7s on /podcasts/episodes), so a retry
+    /// nearly always burns a second full timeout and then fails anyway — the
+    /// user waits ~30s instead of ~15s for the same nothing, and the retry
+    /// piles more load onto the box that was already the reason for the
+    /// timeout. Raising the timeout instead would be worse: a 33.7s p95 would
+    /// still fail, just after holding the UI even longer.
     private static func dataWithRetry(
         session: URLSession,
         request: URLRequest,
@@ -280,8 +289,11 @@ public final class CultureAPIClient: Sendable {
 
     private static func isTransient(_ error: URLError) -> Bool {
         switch error.code {
-        case .timedOut, .networkConnectionLost, .cannotConnectToHost,
-             .cannotFindHost, .dnsLookupFailed, .notConnectedToInternet:
+        // `.notConnectedToInternet` is excluded alongside `.timedOut`: it is a
+        // device-state answer, not a flaky one, and 400ms later the device is
+        // still offline.
+        case .networkConnectionLost, .cannotConnectToHost,
+             .cannotFindHost, .dnsLookupFailed:
             return true
         default:
             return false
