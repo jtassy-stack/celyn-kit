@@ -4,6 +4,7 @@ public struct SeancesResource: Sendable {
     let client: CultureAPIClient
 
     public func list(
+        venueId: String? = nil,
         lat: Double? = nil,
         lng: Double? = nil,
         radiusKm: Double? = nil,
@@ -12,6 +13,7 @@ public struct SeancesResource: Sendable {
         limit: Int? = nil
     ) async throws -> SeanceListResponse {
         var query: [String: String] = [:]
+        if let venueId = venueId { query["venue_id"] = venueId }
         if let lat = lat { query["lat"] = String(lat) }
         if let lng = lng { query["lng"] = String(lng) }
         if let r = radiusKm { query["radius_km"] = String(r) }
