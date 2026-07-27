@@ -145,4 +145,40 @@ final class CelynKitTests: XCTestCase {
     func testRadioCountsAsAudio() {
         XCTAssertNotNil(episode(sourceType: "radio").asOeuvre())
     }
+
+    // MARK: - VenueRef.asVenue()
+
+    func testVenueRefPromotesToFullVenueCarryingItsFields() {
+        let ref = VenueRef(
+            id: "v1", supabaseId: "sb1", name: "Le Patio",
+            address: "1 rue du Panier", city: "Marseille",
+            latitude: 43.30, longitude: 5.37
+        )
+        let venue = ref.asVenue(venueType: .cinema)
+        XCTAssertEqual(venue.id, "v1")
+        XCTAssertEqual(venue.supabaseId, "sb1")
+        XCTAssertEqual(venue.name, "Le Patio")
+        XCTAssertEqual(venue.address, "1 rue du Panier")
+        XCTAssertEqual(venue.city, "Marseille")
+        XCTAssertEqual(venue.latitude, 43.30)
+        XCTAssertEqual(venue.longitude, 5.37)
+        XCTAssertEqual(venue.venueType, .cinema)
+    }
+
+    /// `VenueRef` carries no `venueType` at all — the caller's choice must
+    /// pass through unchanged, not get silently overridden.
+    func testVenueRefAsVenueHonoursTheSuppliedType() {
+        let ref = VenueRef(id: "v2", name: "Le Sémillant")
+        XCTAssertEqual(ref.asVenue(venueType: .bar).venueType, .bar)
+        XCTAssertEqual(ref.asVenue(venueType: .museum).venueType, .museum)
+    }
+
+    func testVenueRefAsVenuePreservesNilOptionals() {
+        let ref = VenueRef(id: "v3", name: "Sans coordonnées")
+        let venue = ref.asVenue(venueType: .other)
+        XCTAssertNil(venue.address)
+        XCTAssertNil(venue.city)
+        XCTAssertNil(venue.latitude)
+        XCTAssertNil(venue.longitude)
+    }
 }

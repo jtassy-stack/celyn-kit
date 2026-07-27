@@ -73,3 +73,26 @@ public struct VenueListResponse: Codable, Sendable {
     public let data: [Venue]
     public let count: Int
 }
+
+public extension VenueRef {
+    /// Promote a lightweight reference to a full Venue using only the fields
+    /// available on the ref. `venueType` isn't carried by `VenueRef` at all,
+    /// so callers must supply it — `.cinema` is right for every current call
+    /// site (cinema showtime groupings), but this is NOT a safe silent
+    /// default for a future caller with a different venue kind.
+    /// `website`/`geofenceRadius`/`mentionCount` are missing too — fine for a
+    /// detail sheet that re-fetches the full `Venue` on appear and only uses
+    /// this to seed the header before that resolves.
+    func asVenue(venueType: VenueType) -> Venue {
+        Venue(
+            id: id,
+            supabaseId: supabaseId,
+            name: name,
+            address: address,
+            city: city,
+            latitude: latitude,
+            longitude: longitude,
+            venueType: venueType
+        )
+    }
+}
