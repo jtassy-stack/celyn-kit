@@ -95,7 +95,8 @@ public extension PodcastEpisode {
             publisher: station,
             isKidFriendly: nil,
             opinions: nil,
-            opinionCount: nil
+            opinionCount: nil,
+            streamingProviders: nil
         )
     }
 }

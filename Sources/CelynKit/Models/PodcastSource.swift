@@ -104,7 +104,8 @@ public extension PodcastSource {
             publisher: station,
             isKidFriendly: nil,
             opinions: nil,
-            opinionCount: nil
+            opinionCount: nil,
+            streamingProviders: nil
         )
     }
 

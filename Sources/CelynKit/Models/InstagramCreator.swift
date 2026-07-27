@@ -80,7 +80,8 @@ public extension InstagramCreator {
             publisher: "Instagram",
             isKidFriendly: nil,
             opinions: nil,
-            opinionCount: nil
+            opinionCount: nil,
+            streamingProviders: nil
         )
     }
 }

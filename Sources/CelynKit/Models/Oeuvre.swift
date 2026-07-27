@@ -33,6 +33,10 @@ public struct Oeuvre: Identifiable, Codable, Sendable, Equatable, Hashable {
     public let isKidFriendly: Bool?
     public let opinions: [OeuvreOpinion]?
     public let opinionCount: Int?
+    /// Films / tvshow / series only — where to watch it, sourced from TMDB
+    /// (France only) by culture-api's enrich-streaming-providers job. NULL
+    /// until enriched, or when TMDB has no French offer for the title.
+    public let streamingProviders: StreamingAvailability?
 }
 
 /// Lightweight oeuvre reference embedded in events / seances.
@@ -96,7 +100,8 @@ public extension OeuvreRef {
             publisher: nil,
             isKidFriendly: nil,
             opinions: nil,
-            opinionCount: nil
+            opinionCount: nil,
+            streamingProviders: nil
         )
     }
 }
@@ -127,6 +132,28 @@ public extension Oeuvre {
             return false
         }
     }
+}
+
+/// Where-to-watch info for a film/tvshow/series, France only. The `link`
+/// points to TMDB's generic "where to watch" page (not a deep-link into a
+/// specific provider's app) — same limitation as the Spotify search fallback
+/// used for music.
+public struct StreamingAvailability: Codable, Sendable, Equatable, Hashable {
+    public let link: String
+    public let providers: [StreamingProvider]
+}
+
+public struct StreamingProvider: Codable, Sendable, Equatable, Hashable {
+    public let providerId: Int
+    public let providerName: String
+    public let logoPath: String
+    public let type: StreamingProviderType
+}
+
+public enum StreamingProviderType: String, Codable, Sendable {
+    case flatrate
+    case rent
+    case buy
 }
 
 /// A critic's opinion sourced from a podcast/radio/YouTube segment.
