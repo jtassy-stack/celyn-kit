@@ -74,6 +74,14 @@ public struct ContactMatchResponse: Codable, Sendable {
 public struct MatchedContact: Codable, Sendable, Identifiable {
     public let id: String
     public let displayName: String?
+    /// The digest the caller submitted for this person, echoed back so the
+    /// client can rejoin the match to its own address-book entry. It reveals
+    /// nothing new — the caller sent it a moment ago.
+    public let phoneSha256: String?
+    /// No longer sent: returning the full number turned a guessed digest into
+    /// a full identity, which is what made `/me/contacts/match` worth walking.
+    /// Kept optional so older payloads still decode, and so a rollback of the
+    /// server change needs no client release.
     public let phone: String?
     public let following: Bool
 }
@@ -81,6 +89,9 @@ public struct MatchedContact: Codable, Sendable, Identifiable {
 public struct CircleMember: Codable, Sendable, Identifiable {
     public let id: String
     public let displayName: String?
+    /// No longer sent — see `MatchedContact.phone`. Nothing replaces it here:
+    /// the circle is people the caller chose to follow, and `displayName` is
+    /// the name they published to be known by.
     public let phone: String?
     public let since: Date?
 }
