@@ -15,6 +15,24 @@ public final class CultureAPIClient: Sendable {
 
     public let baseURL: URL
     public let apiKey: String
+
+    /// Marketing version of the running app, sent as `x-app-version` on every
+    /// request.
+    ///
+    /// The server had no way to tell one client build from another, so any
+    /// change to a response shape had to stay backward-compatible forever, or
+    /// break every phone still running an older version. `/me/contacts/match`
+    /// is the case that forced this: it returns each match's full phone number
+    /// purely because installed clients use it as a display fallback, and that
+    /// is exactly what makes the endpoint worth enumerating. With a version on
+    /// the request the server can stop sending the field to clients that no
+    /// longer need it, instead of waiting for the last old install to die.
+    ///
+    /// Empty string rather than a fake version when the bundle has no
+    /// `CFBundleShortVersionString` (unit tests, SPM consumers): the server
+    /// must read "unknown, assume oldest", never a version that doesn't exist.
+    static let appVersion: String =
+        (Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String) ?? ""
     public let timeout: TimeInterval
 
     /// Supplies the current end-user session token (phone-auth). Read per
@@ -81,6 +99,7 @@ public final class CultureAPIClient: Sendable {
 
         var request = URLRequest(url: url)
         request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
+        request.setValue(Self.appVersion, forHTTPHeaderField: "x-app-version")
         if let token = bearerProvider?(), !token.isEmpty {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
@@ -222,6 +241,7 @@ public final class CultureAPIClient: Sendable {
         request.httpMethod = method
         request.httpBody = payload
         request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
+        request.setValue(Self.appVersion, forHTTPHeaderField: "x-app-version")
         if let token = bearerProvider?(), !token.isEmpty {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
