@@ -58,6 +58,23 @@ public struct MeResource: Sendable {
         try await client.get("me/circle")
     }
 
+    /// How many people the caller MUTUALLY follows have saved each id.
+    ///
+    /// Mutual is not an implementation detail, it is the contract: follows in
+    /// this app are one-way and are seeded from the reader's address book, so
+    /// counting them one-way would expose what someone saves to anyone holding
+    /// their phone number. The server enforces this (see
+    /// `circleFavoriteCounts`); the client must not paper over a future change
+    /// by treating the number as "people I follow".
+    ///
+    /// `kind` mirrors the library's own kinds: `event`, `venue`, `oeuvre`.
+    /// Ids absent from the response simply have no one behind them — the
+    /// server omits zeroes rather than sending a map full of them.
+    public func circleSignal(kind: String, ids: [String]) async throws -> CircleSignalResponse {
+        struct Body: Encodable { let kind: String; let ids: [String] }
+        return try await client.post("me/circle/signal", body: Body(kind: kind, ids: ids))
+    }
+
     // MARK: RGPD
 
     public struct DeleteResponse: Codable, Sendable { public let deleted: Bool }
@@ -94,6 +111,11 @@ public struct CircleMember: Codable, Sendable, Identifiable {
     /// the name they published to be known by.
     public let phone: String?
     public let since: Date?
+}
+
+public struct CircleSignalResponse: Codable, Sendable {
+    /// rawId → number of mutually-followed people who saved it. Absent means 0.
+    public let counts: [String: Int]
 }
 
 public struct FollowResponse: Codable, Sendable {
