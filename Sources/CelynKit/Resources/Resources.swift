@@ -14,4 +14,6 @@ public extension CultureAPIClient {
     var eventSubmissions: EventSubmissionsResource { EventSubmissionsResource(client: self) }
     var festivals: FestivalsResource { FestivalsResource(client: self) }
     var feed: FeedResource { FeedResource(client: self) }
+    var news: NewsResource { NewsResource(client: self) }
+    var curation: CurationResource { CurationResource(client: self) }
 }

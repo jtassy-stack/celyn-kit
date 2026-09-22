@@ -181,4 +181,118 @@ final class CelynKitTests: XCTestCase {
         XCTAssertNil(venue.latitude)
         XCTAssertNil(venue.longitude)
     }
+
+    private func newsDecoder() -> JSONDecoder {
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        decoder.dateDecodingStrategy = .custom { decoder in
+            let str = try decoder.singleValueContainer().decode(String.self)
+            guard let d = CultureAPIDateParsing.parse(str) else {
+                throw DecodingError.dataCorruptedError(in: try decoder.singleValueContainer(), debugDescription: "")
+            }
+            return d
+        }
+        return decoder
+    }
+
+    func testNewsStoryListResponseDecoding() throws {
+        let json = """
+        {
+            "data": [
+                {
+                    "id": "s1",
+                    "title": "Grève des transports",
+                    "primary_kind": "societe",
+                    "entity_tokens": ["ratp", "greve"],
+                    "confidence_score": 0.87,
+                    "event_count": 5,
+                    "source_count": 3,
+                    "first_seen_at": "2026-09-20T08:00:00Z",
+                    "last_update_at": "2026-09-22T10:00:00Z",
+                    "status": "active",
+                    "sources": [
+                        {"source_type": "editorial_rss", "label": "Le Monde", "count": 2}
+                    ]
+                }
+            ],
+            "meta": {"limit": 30, "count": 1, "sort": "recent", "status": "active"}
+        }
+        """.data(using: .utf8)!
+
+        let response = try newsDecoder().decode(NewsStoryListResponse.self, from: json)
+        XCTAssertEqual(response.data.first?.title, "Grève des transports")
+        XCTAssertEqual(response.data.first?.primaryKind, .societe)
+        XCTAssertEqual(response.data.first?.sources.first?.label, "Le Monde")
+        XCTAssertEqual(response.meta.count, 1)
+    }
+
+    func testNewsEventKindDecodesUnknownValueToAutre() throws {
+        let json = "\"some_future_kind\"".data(using: .utf8)!
+        let kind = try JSONDecoder().decode(NewsEventKind.self, from: json)
+        XCTAssertEqual(kind, .autre)
+    }
+
+    func testNewsEventDecodingWithFactCheck() throws {
+        let json = """
+        {
+            "id": "e1",
+            "kind": "politique",
+            "summary": "Un résumé reformulé.",
+            "source_type": "editorial_rss",
+            "source_url": "https://example.com/a",
+            "source_published_at": null,
+            "author_display_name": "Le Monde",
+            "programme": null,
+            "is_live_blog": false,
+            "created_at": "2026-09-22T09:00:00Z",
+            "fact_checks": [
+                {
+                    "claim": "3000 manifestants",
+                    "subject": "manifestation",
+                    "verdict": "plausible",
+                    "confidence": 0.3,
+                    "source": null,
+                    "source_url": null,
+                    "note": null
+                }
+            ]
+        }
+        """.data(using: .utf8)!
+
+        let event = try newsDecoder().decode(NewsEvent.self, from: json)
+        XCTAssertEqual(event.kind, .politique)
+        XCTAssertEqual(event.factChecks.first?.verdict, .plausible)
+        XCTAssertNil(event.sourcePublishedAt)
+    }
+
+    func testCuratedSourceListResponseDecoding() throws {
+        let json = """
+        {
+            "data": [
+                {
+                    "id": "src1",
+                    "name": "France Inter",
+                    "show_name": "Le Masque et la Plume",
+                    "station": "France Inter",
+                    "source_type": "rss",
+                    "category": "culture",
+                    "city": null,
+                    "image_url": null,
+                    "featured": true,
+                    "venue_id": null,
+                    "tier": "reference",
+                    "credibility_score": 0.9
+                }
+            ],
+            "count": 1
+        }
+        """.data(using: .utf8)!
+
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        let response = try decoder.decode(CuratedSourceListResponse.self, from: json)
+        XCTAssertEqual(response.data.first?.showName, "Le Masque et la Plume")
+        XCTAssertEqual(response.data.first?.featured, true)
+        XCTAssertEqual(response.count, 1)
+    }
 }
