@@ -33,6 +33,13 @@ public final class CultureAPIClient: Sendable {
     /// must read "unknown, assume oldest", never a version that doesn't exist.
     static let appVersion: String =
         (Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String) ?? ""
+
+    /// Sent as `Accept-Language` on every request so the server returns
+    /// localized titles/descriptions/critic opinions for non-French users
+    /// instead of always defaulting to French. BCP-47 (e.g. "en-US"), read
+    /// from the device's preferred languages.
+    static let acceptLanguage: String =
+        Locale.preferredLanguages.first ?? Locale.current.identifier
     public let timeout: TimeInterval
 
     /// Supplies the current end-user session token (phone-auth). Read per
@@ -100,6 +107,7 @@ public final class CultureAPIClient: Sendable {
         var request = URLRequest(url: url)
         request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
         request.setValue(Self.appVersion, forHTTPHeaderField: "x-app-version")
+        request.setValue(Self.acceptLanguage, forHTTPHeaderField: "Accept-Language")
         if let token = bearerProvider?(), !token.isEmpty {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
@@ -242,6 +250,7 @@ public final class CultureAPIClient: Sendable {
         request.httpBody = payload
         request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
         request.setValue(Self.appVersion, forHTTPHeaderField: "x-app-version")
+        request.setValue(Self.acceptLanguage, forHTTPHeaderField: "Accept-Language")
         if let token = bearerProvider?(), !token.isEmpty {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
