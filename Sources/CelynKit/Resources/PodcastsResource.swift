@@ -20,4 +20,24 @@ public struct PodcastsResource: Sendable {
         if let sourceId { query["source_id"] = sourceId }
         return try await client.get("podcasts/episodes", query: query)
     }
+
+    /// `GET /podcasts/feed` — ranked recent items with the oeuvres they
+    /// discuss. `sourceType` restricts to one source type before ranking:
+    /// `.rss` for audio podcasts, `.youtube` for videos.
+    public func feed(sourceType: PodcastFeedSourceType? = nil, limit: Int? = nil) async throws -> PodcastFeedResponse {
+        try await client.get("podcasts/feed", query: Self.feedQuery(sourceType: sourceType, limit: limit))
+    }
+
+    /// Query builder for `feed`, exposed for tests.
+    public static func feedQuery(sourceType: PodcastFeedSourceType? = nil, limit: Int? = nil) -> [String: String] {
+        var query: [String: String] = [:]
+        if let sourceType { query["source_type"] = sourceType.rawValue }
+        if let limit { query["limit"] = String(limit) }
+        return query
+    }
+}
+
+public enum PodcastFeedSourceType: String, Sendable {
+    case rss
+    case youtube
 }

@@ -43,19 +43,19 @@ public struct Oeuvre: Identifiable, Codable, Sendable, Equatable, Hashable {
     /// Only on `oeuvres.list(sort: .mentioned)`: when the oeuvre was last
     /// discussed by a source. nil = no recent mention (or other sort).
     public var lastMentionedAt: Date? = nil
-    /// Only on `oeuvres.list(sort: .mentioned)`: French theatrical release
+    /// Only on `oeuvres.list(sort: .mentioned / .upcoming)`: French theatrical release
     /// date (date-only, decoded at noon UTC). nil = unknown / not a film.
     public var releaseDateTheatricalFr: Date? = nil
-    /// Only on `oeuvres.list(sort: .mentioned)`: French digital (VOD/EST)
+    /// Only on `oeuvres.list(sort: .mentioned / .upcoming)`: French digital (VOD/EST)
     /// release date (date-only, decoded at noon UTC).
     public var releaseDateDigitalFr: Date? = nil
-    /// Only on `oeuvres.list(sort: .mentioned)`: French TV premiere date
+    /// Only on `oeuvres.list(sort: .mentioned / .upcoming)`: French TV premiere date
     /// (date-only, decoded at noon UTC).
     public var releaseDateTvFr: Date? = nil
-    /// Only on `oeuvres.list(sort: .mentioned)`: most recent arrival on a
+    /// Only on `oeuvres.list(sort: .mentioned / .upcoming)`: most recent arrival on a
     /// French streaming provider. nil = none known.
     public var streamingLatestArrivalAt: Date? = nil
-    /// Only on `oeuvres.list(sort: .mentioned)`: currently showing in French
+    /// Only on `oeuvres.list(sort: .mentioned / .upcoming)`: currently showing in French
     /// cinemas. nil = not reported (older server or other sort).
     public var nowShowing: Bool? = nil
 }

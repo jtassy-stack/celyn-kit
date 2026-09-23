@@ -405,4 +405,54 @@ final class CelynKitTests: XCTestCase {
         XCTAssertEqual(response.data.first?.venue?.name, "Le Grand Action")
         XCTAssertEqual(response.data.first?.venue?.latitude, 48.8492)
     }
+
+    // MARK: - Actu magazine (upcoming releases + feed)
+
+    func testOeuvreListQueryUpcoming() {
+        let q = OeuvresResource.listQuery(limit: 20, sort: .upcoming, withinDays: 60)
+        XCTAssertEqual(q["sort"], "upcoming")
+        XCTAssertEqual(q["within_days"], "60")
+        XCTAssertEqual(q["limit"], "20")
+        XCTAssertNil(q["type"])
+        XCTAssertNil(OeuvresResource.listQuery(sort: .mentioned)["within_days"])
+    }
+
+    func testPodcastFeedQuery() {
+        let q = PodcastsResource.feedQuery(sourceType: .youtube, limit: 15)
+        XCTAssertEqual(q["source_type"], "youtube")
+        XCTAssertEqual(q["limit"], "15")
+        XCTAssertTrue(PodcastsResource.feedQuery().isEmpty)
+        XCTAssertEqual(PodcastsResource.feedQuery(sourceType: .rss)["source_type"], "rss")
+    }
+
+    func testPodcastFeedDecodingFromAPIShape() throws {
+        let json = """
+        {"data":[
+          {"episodeId":"e1","title":"Video","audioUrl":"youtube:audio:oGVtbkHof8w",
+           "publishedAt":"2026-09-22 16:00:11","showName":"Regelegorila","station":"YouTube",
+           "coverUrl":null,"sourceType":"youtube","youtubeVideoId":"oGVtbkHof8w",
+           "oeuvres":[{"id":"o1","title":"Slayground","type":"film"}],
+           "nearestEventKm":null,"soonestEventAt":null,"score":0.61,
+           "signals":{"freshness":0.9,"geo":0,"eventSoon":0,"pulse":0.2}},
+          {"episodeId":"e2","title":"Legacy video","audioUrl":"youtube:audio:zzzYYY98765",
+           "publishedAt":"2026-09-21T10:00:00.000Z","showName":"X","station":"YouTube",
+           "coverUrl":null,"sourceType":"youtube","oeuvres":[]},
+          {"episodeId":"e3","title":"Pod","audioUrl":"https://cdn.example.com/a.mp3",
+           "publishedAt":"2026-09-21T10:00:00.000Z","showName":"Le Masque","station":"France Inter",
+           "coverUrl":"https://img/x.jpg","sourceType":"rss","youtubeVideoId":null,"oeuvres":[]}
+        ],"meta":{"pool":3,"geo":null,"trendingTopics":[]}}
+        """.data(using: .utf8)!
+        let r = try newsDecoder().decode(PodcastFeedResponse.self, from: json)
+        XCTAssertEqual(r.data.count, 3)
+        let v = r.data[0]
+        XCTAssertEqual(v.id, "e1")
+        XCTAssertNotNil(v.publishedAt)
+        XCTAssertEqual(v.oeuvres?.first?.title, "Slayground")
+        XCTAssertEqual(v.youtubeWatchURL?.absoluteString, "https://www.youtube.com/watch?v=oGVtbkHof8w")
+        XCTAssertEqual(v.youtubeThumbnailURL?.absoluteString, "https://i.ytimg.com/vi/oGVtbkHof8w/hqdefault.jpg")
+        XCTAssertNil(v.playableAudioURL)
+        XCTAssertEqual(r.data[1].resolvedYouTubeVideoId, "zzzYYY98765")
+        XCTAssertNil(r.data[2].resolvedYouTubeVideoId)
+        XCTAssertEqual(r.data[2].playableAudioURL?.absoluteString, "https://cdn.example.com/a.mp3")
+    }
 }
