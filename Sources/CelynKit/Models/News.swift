@@ -169,6 +169,29 @@ public struct NewsEvent: Identifiable, Codable, Sendable, Equatable {
         self.createdAt = createdAt
         self.factChecks = factChecks
     }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, kind, summary, sourceType, sourceUrl, sourcePublishedAt
+        case authorDisplayName, programme, isLiveBlog, createdAt, factChecks
+    }
+
+    /// The server sends `"factChecks": null` until its fact-check job has run
+    /// on an event (and `isLiveBlog` may be absent on older rows). Synthesized
+    /// decoding threw on the null and blanked the whole story detail.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        kind = try c.decode(NewsEventKind.self, forKey: .kind)
+        summary = try c.decodeIfPresent(String.self, forKey: .summary)
+        sourceType = try c.decode(String.self, forKey: .sourceType)
+        sourceUrl = try c.decodeIfPresent(String.self, forKey: .sourceUrl)
+        sourcePublishedAt = try c.decodeIfPresent(Date.self, forKey: .sourcePublishedAt)
+        authorDisplayName = try c.decodeIfPresent(String.self, forKey: .authorDisplayName)
+        programme = try c.decodeIfPresent(String.self, forKey: .programme)
+        isLiveBlog = try c.decodeIfPresent(Bool.self, forKey: .isLiveBlog) ?? false
+        createdAt = try c.decode(Date.self, forKey: .createdAt)
+        factChecks = try c.decodeIfPresent([NewsFactCheck].self, forKey: .factChecks) ?? []
+    }
 }
 
 public struct NewsStoryDetail: Identifiable, Codable, Sendable, Equatable {

@@ -328,6 +328,18 @@ final class CelynKitTests: XCTestCase {
         XCTAssertNil(a.nowShowing)
     }
 
+    func testNewsEventDecodesNullFactChecks() throws {
+        // Real prod shape (2026-09-23): events not yet fact-checked carry null.
+        let json = """
+        {"id":"e1","kind":"culture","summary":"s","sourceType":"rss","sourceUrl":null,
+         "sourcePublishedAt":"2026-09-23T08:18:47.000Z","authorDisplayName":"HugoDécrypte",
+         "programme":null,"isLiveBlog":false,"createdAt":"2026-09-23T09:30:17.789Z","factChecks":null}
+        """.data(using: .utf8)!
+        let e = try newsDecoder().decode(NewsEvent.self, from: json)
+        XCTAssertEqual(e.factChecks, [])
+        XCTAssertEqual(e.authorDisplayName, "HugoDécrypte")
+    }
+
     func testNewsStoryListResponseDecoding() throws {
         let json = """
         {
