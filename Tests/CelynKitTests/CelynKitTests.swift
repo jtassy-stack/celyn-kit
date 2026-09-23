@@ -211,6 +211,50 @@ final class CelynKitTests: XCTestCase {
         XCTAssertNil(b.lastMentionedAt)
     }
 
+    func testOeuvreDecodesReleaseAndAvailabilitySignals() throws {
+        let json = """
+        {"id":"o1","title":"Anora","oeuvreType":"film","sourceCount":2,
+         "releaseDateTheatricalFr":"2026-09-17","releaseDateDigitalFr":"2027-01-05",
+         "releaseDateTvFr":"2027-06-01","streamingLatestArrivalAt":"2026-09-21T10:00:00.000Z",
+         "nowShowing":true}
+        """.data(using: .utf8)!
+        let o = try newsDecoder().decode(Oeuvre.self, from: json)
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "Europe/Paris")!
+        func ymd(_ d: Date?) -> [Int]? {
+            guard let d else { return nil }
+            let c = cal.dateComponents([.year, .month, .day], from: d)
+            return [c.year!, c.month!, c.day!]
+        }
+        XCTAssertEqual(ymd(o.releaseDateTheatricalFr), [2026, 9, 17])
+        XCTAssertEqual(ymd(o.releaseDateDigitalFr), [2027, 1, 5])
+        XCTAssertEqual(ymd(o.releaseDateTvFr), [2027, 6, 1])
+        XCTAssertEqual(o.streamingLatestArrivalAt, CultureAPIDateParsing.parse("2026-09-21T10:00:00.000Z"))
+        XCTAssertEqual(o.nowShowing, true)
+
+        let nulls = """
+        {"id":"o2","title":"X","oeuvreType":"film","releaseDateTheatricalFr":null,
+         "releaseDateDigitalFr":null,"releaseDateTvFr":null,
+         "streamingLatestArrivalAt":null,"nowShowing":false}
+        """.data(using: .utf8)!
+        let n = try newsDecoder().decode(Oeuvre.self, from: nulls)
+        XCTAssertNil(n.releaseDateTheatricalFr)
+        XCTAssertNil(n.releaseDateDigitalFr)
+        XCTAssertNil(n.releaseDateTvFr)
+        XCTAssertNil(n.streamingLatestArrivalAt)
+        XCTAssertEqual(n.nowShowing, false)
+
+        let absent = """
+        {"id":"o3","title":"Y","oeuvreType":"book"}
+        """.data(using: .utf8)!
+        let a = try newsDecoder().decode(Oeuvre.self, from: absent)
+        XCTAssertNil(a.releaseDateTheatricalFr)
+        XCTAssertNil(a.releaseDateDigitalFr)
+        XCTAssertNil(a.releaseDateTvFr)
+        XCTAssertNil(a.streamingLatestArrivalAt)
+        XCTAssertNil(a.nowShowing)
+    }
+
     func testNewsStoryListResponseDecoding() throws {
         let json = """
         {
