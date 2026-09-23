@@ -81,6 +81,19 @@ public struct Oeuvre: Identifiable, Codable, Sendable, Equatable, Hashable {
     /// `StreamingPlatform.providerId` for "mes plateformes" filtering.
     /// nil = not reported (older server / detail endpoint); [] = none known.
     public var streamingProviderIds: [Int]? = nil
+    /// tvshow / series only, on `oeuvres.list(sort: .mentioned / .upcoming)`:
+    /// air date of the next episode dated today (Paris) or later (date-only,
+    /// decoded at noon UTC). nil = nothing scheduled / not TV / older server.
+    public var nextEpisodeAt: Date? = nil
+    /// tvshow / series only, on `oeuvres.get(id:)`: next episode (an episode
+    /// airing today counts as next). nil = none known / older server.
+    public var nextEpisode: EpisodeSummary? = nil
+    /// tvshow / series only, on `oeuvres.get(id:)`: most recent episode aired
+    /// before today. nil = none known / older server.
+    public var lastEpisode: EpisodeSummary? = nil
+    /// tvshow / series only, on `oeuvres.get(id:)`: the current season's
+    /// episodes in order. nil = older server / not TV; [] = not enriched yet.
+    public var currentSeasonEpisodes: [EpisodeSummary]? = nil
 }
 
 /// A literary prize selection or win ("Prix Goncourt 2026 · 1re sélection").

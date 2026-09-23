@@ -16,4 +16,6 @@ public extension CultureAPIClient {
     var feed: FeedResource { FeedResource(client: self) }
     var news: NewsResource { NewsResource(client: self) }
     var curation: CurationResource { CurationResource(client: self) }
+    /// TV episodes (series / anime), not podcast episodes.
+    var episodes: EpisodesResource { EpisodesResource(client: self) }
 }

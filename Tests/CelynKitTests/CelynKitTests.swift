@@ -621,4 +621,70 @@ final class CelynKitTests: XCTestCase {
         XCTAssertNil(none["anime"])
         XCTAssertEqual(OeuvresResource.listQuery(anime: false)["anime"], "false")
     }
+
+    // MARK: - TV episodes (culture-api migration 0135)
+
+    func testUpcomingEpisodesDecode() throws {
+        let json = """
+        {"data":[{"id":"e1","seasonNumber":2,"episodeNumber":5,"name":"Épisode 5","overview":null,"airDate":"2026-09-26",
+                  "runtime":45,"stillUrl":"https://image.tmdb.org/t/p/w300/s.jpg",
+                  "oeuvre":{"id":"o1","title":"Evil","oeuvreType":"tvshow","imageUrl":null,"isAnime":false,
+                            "streamingProviderIds":[8],
+                            "streamingProviders":[{"providerId":8,"providerName":"Netflix","logoUrl":"https://image.tmdb.org/t/p/w92/n.png","monetization":"flatrate"}]}}],
+         "count":1,"from":"2026-09-23","to":"2026-09-30","region":"FR","attribution":"Episode data by TMDB"}
+        """.data(using: .utf8)!
+        let r = try newsDecoder().decode(EpisodeListResponse.self, from: json)
+        let e = try XCTUnwrap(r.data.first)
+        XCTAssertEqual(e.code, "S2E5")
+        XCTAssertEqual(e.oeuvre.title, "Evil")
+        XCTAssertEqual(e.oeuvre.oeuvreType, .tvshow)
+        XCTAssertEqual(e.oeuvre.streamingProviders?.first?.providerId, 8)
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "Europe/Paris")!
+        XCTAssertEqual(cal.component(.day, from: try XCTUnwrap(e.airDate)), 26)
+        XCTAssertNotNil(r.from)
+        XCTAssertEqual(r.attribution, "Episode data by TMDB")
+    }
+
+    func testOeuvreDecodesEpisodeFields() throws {
+        let detail = """
+        {"id":"o1","title":"Evil","oeuvreType":"tvshow",
+         "nextEpisode":{"seasonNumber":2,"episodeNumber":5,"name":"Épisode 5","airDate":"2026-09-26"},
+         "lastEpisode":{"seasonNumber":2,"episodeNumber":4,"name":"Le retour","airDate":"2026-09-19"},
+         "currentSeasonEpisodes":[{"seasonNumber":2,"episodeNumber":1,"name":null,"airDate":null},
+                                  {"seasonNumber":2,"episodeNumber":5,"name":"Épisode 5","airDate":"2026-09-26"}]}
+        """.data(using: .utf8)!
+        let o = try newsDecoder().decode(Oeuvre.self, from: detail)
+        XCTAssertEqual(o.nextEpisode?.code, "S2E5")
+        XCTAssertEqual(o.lastEpisode?.name, "Le retour")
+        XCTAssertEqual(o.currentSeasonEpisodes?.count, 2)
+        XCTAssertNil(o.currentSeasonEpisodes?.first?.airDate)
+
+        let row = """
+        {"id":"o2","title":"Frieren","oeuvreType":"tvshow","nextEpisodeAt":"2026-09-25"}
+        """.data(using: .utf8)!
+        XCTAssertNotNil(try newsDecoder().decode(Oeuvre.self, from: row).nextEpisodeAt)
+
+        let old = """
+        {"id":"o3","title":"X","oeuvreType":"tvshow","nextEpisodeAt":null}
+        """.data(using: .utf8)!
+        let b = try newsDecoder().decode(Oeuvre.self, from: old)
+        XCTAssertNil(b.nextEpisodeAt)
+        XCTAssertNil(b.nextEpisode)
+        XCTAssertNil(b.currentSeasonEpisodes)
+    }
+
+    func testUpcomingQuery() throws {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "UTC")!
+        // 23:30 UTC on Sept 23 is already Sept 24 in Paris.
+        let late = try XCTUnwrap(cal.date(from: DateComponents(year: 2026, month: 9, day: 23, hour: 23, minute: 30)))
+        let q = EpisodesResource.upcomingQuery(from: late, providers: ["8", " crunchyroll ", ""], anime: true, limit: 20)
+        XCTAssertEqual(q["from"], "2026-09-24")
+        XCTAssertNil(q["to"])
+        XCTAssertEqual(q["provider"], "8,crunchyroll")
+        XCTAssertEqual(q["anime"], "true")
+        XCTAssertEqual(q["limit"], "20")
+        XCTAssertTrue(EpisodesResource.upcomingQuery().isEmpty)
+    }
 }
