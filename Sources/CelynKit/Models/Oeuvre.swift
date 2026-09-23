@@ -37,6 +37,12 @@ public struct Oeuvre: Identifiable, Codable, Sendable, Equatable, Hashable {
     /// (France only) by culture-api's enrich-streaming-providers job. NULL
     /// until enriched, or when TMDB has no French offer for the title.
     public let streamingProviders: StreamingAvailability?
+    /// Only on `oeuvres.list(sort: .mentioned)`: distinct sources with a
+    /// direct opinion on this oeuvre over the server's recent window (180 days).
+    public var sourceCount: Int? = nil
+    /// Only on `oeuvres.list(sort: .mentioned)`: when the oeuvre was last
+    /// discussed by a source. nil = no recent mention (or other sort).
+    public var lastMentionedAt: Date? = nil
 }
 
 /// Lightweight oeuvre reference embedded in events / seances.

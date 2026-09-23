@@ -195,6 +195,22 @@ final class CelynKitTests: XCTestCase {
         return decoder
     }
 
+    func testOeuvreDecodesMentionSignals() throws {
+        let json = """
+        {"id":"o1","title":"Anora","oeuvreType":"film","sourceCount":3,"lastMentionedAt":"2026-09-20T08:00:00.000Z"}
+        """.data(using: .utf8)!
+        let o = try newsDecoder().decode(Oeuvre.self, from: json)
+        XCTAssertEqual(o.sourceCount, 3)
+        XCTAssertNotNil(o.lastMentionedAt)
+
+        let bare = """
+        {"id":"o2","title":"X","oeuvreType":"book","lastMentionedAt":null}
+        """.data(using: .utf8)!
+        let b = try newsDecoder().decode(Oeuvre.self, from: bare)
+        XCTAssertNil(b.sourceCount)
+        XCTAssertNil(b.lastMentionedAt)
+    }
+
     func testNewsStoryListResponseDecoding() throws {
         let json = """
         {
