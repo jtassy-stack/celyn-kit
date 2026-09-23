@@ -72,6 +72,15 @@ public struct Oeuvre: Identifiable, Codable, Sendable, Equatable, Hashable {
     /// in-app: open it externally, and only when `trailerUrl` is nil
     /// (`trailerUrl` stays a YouTube watch URL). nil = none / older server.
     public var trailerExternalUrl: String? = nil
+    /// Japanese animation (culture-api migration 0134: TMDB original
+    /// language `ja` + Animation genre). nil = unclassified / older server.
+    public var isAnime: Bool? = nil
+    /// List rows only (`oeuvres.list`): TMDB provider ids with an offer
+    /// INCLUDED with the service in France (subscription, free or
+    /// ad-supported — never rent/buy). Match against
+    /// `StreamingPlatform.providerId` for "mes plateformes" filtering.
+    /// nil = not reported (older server / detail endpoint); [] = none known.
+    public var streamingProviderIds: [Int]? = nil
 }
 
 /// A literary prize selection or win ("Prix Goncourt 2026 · 1re sélection").
@@ -235,13 +244,75 @@ public struct StreamingProvider: Codable, Sendable, Equatable, Hashable {
     public let providerId: Int
     public let providerName: String
     public let logoPath: String
+    /// culture-api reports free / ad-supported offers as `.flatrate` (kept
+    /// for clients ≤ 1.7 whose enum had only flatrate/rent/buy); the real
+    /// value is in `monetization`.
     public let type: StreamingProviderType
+    /// Real TMDB monetization ("flatrate", "free", "ads", "rent", "buy").
+    /// nil = older server.
+    public var monetization: StreamingProviderType? = nil
+
+    /// Included with the service (subscription, free or ads) — not rent/buy.
+    public var isIncluded: Bool {
+        switch monetization ?? type {
+        case .flatrate, .free, .ads: return true
+        case .rent, .buy, .unknown: return false
+        }
+    }
 }
 
+/// Decodes any unknown future value as `.unknown` instead of failing the
+/// whole oeuvre.
 public enum StreamingProviderType: String, Codable, Sendable {
     case flatrate
+    case free
+    case ads
     case rent
     case buy
+    case unknown
+
+    public init(from decoder: Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        self = StreamingProviderType(rawValue: raw) ?? .unknown
+    }
+}
+
+/// A French streaming platform from `oeuvres.providers()` (culture-api
+/// `GET /oeuvres/providers`, migration 0134).
+public struct StreamingPlatform: Codable, Sendable, Equatable, Hashable, Identifiable {
+    public let providerId: Int
+    /// "netflix", "prime-video", "crunchyroll", "france-tv", … — accepted by
+    /// `oeuvres.list(provider:)`.
+    public let slug: String
+    public let name: String
+    public let logoPath: String?
+    /// TMDB w92 logo URL.
+    public let logoUrl: String?
+    public let oeuvreCount: Int
+    public let tvCount: Int
+    public let filmCount: Int
+    public let animeCount: Int
+
+    public var id: Int { providerId }
+
+    public init(providerId: Int, slug: String, name: String, logoPath: String?, logoUrl: String?, oeuvreCount: Int, tvCount: Int, filmCount: Int, animeCount: Int) {
+        self.providerId = providerId
+        self.slug = slug
+        self.name = name
+        self.logoPath = logoPath
+        self.logoUrl = logoUrl
+        self.oeuvreCount = oeuvreCount
+        self.tvCount = tvCount
+        self.filmCount = filmCount
+        self.animeCount = animeCount
+    }
+}
+
+public struct StreamingPlatformListResponse: Codable, Sendable {
+    public let data: [StreamingPlatform]
+    public let count: Int
+    /// JustWatch attribution to show next to provider logos.
+    public var attribution: String? = nil
 }
 
 /// A critic's opinion sourced from a podcast/radio/YouTube segment.

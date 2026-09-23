@@ -523,4 +523,65 @@ final class CelynKitTests: XCTestCase {
         XCTAssertNil(r.data[2].resolvedYouTubeVideoId)
         XCTAssertEqual(r.data[2].playableAudioURL?.absoluteString, "https://cdn.example.com/a.mp3")
     }
+
+    // MARK: - Platform series / anime (culture-api migration 0134)
+
+    func testOeuvreDecodesAnimeAndProviderIds() throws {
+        let json = """
+        {"id":"t1","title":"One Piece","oeuvreType":"tvshow","isAnime":true,"streamingProviderIds":[8,283]}
+        """.data(using: .utf8)!
+        let o = try newsDecoder().decode(Oeuvre.self, from: json)
+        XCTAssertEqual(o.isAnime, true)
+        XCTAssertEqual(o.streamingProviderIds, [8, 283])
+
+        let old = """
+        {"id":"t2","title":"X","oeuvreType":"tvshow"}
+        """.data(using: .utf8)!
+        let b = try newsDecoder().decode(Oeuvre.self, from: old)
+        XCTAssertNil(b.isAnime)
+        XCTAssertNil(b.streamingProviderIds)
+    }
+
+    func testStreamingProviderMonetizationAndUnknownType() throws {
+        let json = """
+        {"id":"t3","title":"Série","oeuvreType":"tvshow","streamingProviders":{"link":"https://tmdb","providers":[
+          {"providerId":236,"providerName":"France TV","logoPath":"/f.jpg","type":"flatrate","monetization":"free"},
+          {"providerId":2,"providerName":"Apple TV","logoPath":"/a.jpg","type":"buy","monetization":"buy"},
+          {"providerId":9,"providerName":"Futur","logoPath":"/x.jpg","type":"something_new"}
+        ]}}
+        """.data(using: .utf8)!
+        let o = try newsDecoder().decode(Oeuvre.self, from: json)
+        let p = try XCTUnwrap(o.streamingProviders?.providers)
+        XCTAssertEqual(p[0].type, .flatrate)
+        XCTAssertEqual(p[0].monetization, .free)
+        XCTAssertTrue(p[0].isIncluded)
+        XCTAssertFalse(p[1].isIncluded)
+        XCTAssertEqual(p[2].type, .unknown)
+        XCTAssertNil(p[2].monetization)
+        XCTAssertFalse(p[2].isIncluded)
+    }
+
+    func testStreamingPlatformListDecodes() throws {
+        let json = """
+        {"data":[{"providerId":8,"slug":"netflix","name":"Netflix","logoPath":"/n.jpg","logoUrl":"https://image.tmdb.org/t/p/w92/n.jpg",
+                  "oeuvreCount":812,"tvCount":640,"filmCount":172,"animeCount":41}],
+         "count":1,"region":"FR","attribution":"Where-to-watch data by JustWatch via TMDB"}
+        """.data(using: .utf8)!
+        let r = try newsDecoder().decode(StreamingPlatformListResponse.self, from: json)
+        XCTAssertEqual(r.data.first?.slug, "netflix")
+        XCTAssertEqual(r.data.first?.id, 8)
+        XCTAssertEqual(r.data.first?.animeCount, 41)
+        XCTAssertEqual(r.attribution, "Where-to-watch data by JustWatch via TMDB")
+    }
+
+    func testListQueryProviderAndAnime() {
+        let q = OeuvresResource.listQuery(type: .tvshow, providers: ["8", " crunchyroll ", ""], anime: true)
+        XCTAssertEqual(q["provider"], "8,crunchyroll")
+        XCTAssertEqual(q["anime"], "true")
+        XCTAssertEqual(q["type"], "tvshow")
+        let none = OeuvresResource.listQuery(type: .film)
+        XCTAssertNil(none["provider"])
+        XCTAssertNil(none["anime"])
+        XCTAssertEqual(OeuvresResource.listQuery(anime: false)["anime"], "false")
+    }
 }
