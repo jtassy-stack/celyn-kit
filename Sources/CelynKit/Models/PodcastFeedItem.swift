@@ -7,6 +7,19 @@ public struct PodcastFeedItem: Identifiable, Codable, Sendable, Equatable, Hasha
         public let id: String
         public let title: String
         public let type: String
+        /// Seconds into the episode where this oeuvre is first discussed
+        /// (LLM-estimated, minute grain). nil when unknown / older servers.
+        public var segmentStart: Int? = nil
+        /// Seconds where the discussion ends. Not populated server-side yet.
+        public var segmentEnd: Int? = nil
+
+        public init(id: String, title: String, type: String, segmentStart: Int? = nil, segmentEnd: Int? = nil) {
+            self.id = id
+            self.title = title
+            self.type = type
+            self.segmentStart = segmentStart
+            self.segmentEnd = segmentEnd
+        }
     }
 
     public let episodeId: String
@@ -23,6 +36,8 @@ public struct PodcastFeedItem: Identifiable, Codable, Sendable, Equatable, Hasha
     public var youtubeVideoId: String? = nil
     public var oeuvres: [OeuvreMention]? = nil
     public var score: Double? = nil
+    /// Earliest `segmentStart` across `oeuvres` (seconds), or nil.
+    public var startAt: Int? = nil
 
     public var id: String { episodeId }
 
@@ -37,7 +52,8 @@ public struct PodcastFeedItem: Identifiable, Codable, Sendable, Equatable, Hasha
         sourceType: String? = nil,
         youtubeVideoId: String? = nil,
         oeuvres: [OeuvreMention]? = nil,
-        score: Double? = nil
+        score: Double? = nil,
+        startAt: Int? = nil
     ) {
         self.episodeId = episodeId
         self.title = title
@@ -50,6 +66,7 @@ public struct PodcastFeedItem: Identifiable, Codable, Sendable, Equatable, Hasha
         self.youtubeVideoId = youtubeVideoId
         self.oeuvres = oeuvres
         self.score = score
+        self.startAt = startAt
     }
 }
 
@@ -62,6 +79,11 @@ public extension PodcastFeedItem {
         guard let audioUrl, audioUrl.hasPrefix(prefix) else { return nil }
         let id = String(audioUrl.dropFirst(prefix.count))
         return id.isEmpty ? nil : id
+    }
+
+    /// Segment start (seconds) for a given oeuvre in this item, else nil.
+    func segmentStart(forOeuvre oeuvreId: String) -> Int? {
+        oeuvres?.first { $0.id == oeuvreId }?.segmentStart
     }
 
     /// `https://www.youtube.com/watch?v=<id>` for YouTube items.

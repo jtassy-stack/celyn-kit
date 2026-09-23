@@ -536,6 +536,31 @@ final class CelynKitTests: XCTestCase {
         XCTAssertEqual(r.data[2].playableAudioURL?.absoluteString, "https://cdn.example.com/a.mp3")
     }
 
+    func testPodcastFeedDecodesSegmentTimes() throws {
+        let json = """
+        {"data":[
+          {"episodeId":"e1","title":"Pod","audioUrl":"https://cdn.example.com/a.mp3","sourceType":"rss",
+           "oeuvres":[{"id":"o1","title":"A","type":"film","segmentStart":754,"segmentEnd":null},
+                      {"id":"o2","title":"B","type":"book","segmentStart":null,"segmentEnd":null}],
+           "startAt":754},
+          {"episodeId":"e2","title":"Old server","audioUrl":"https://cdn.example.com/b.mp3","sourceType":"rss",
+           "oeuvres":[{"id":"o3","title":"C","type":"film"}]}
+        ]}
+        """.data(using: .utf8)!
+        let r = try newsDecoder().decode(PodcastFeedResponse.self, from: json)
+        XCTAssertEqual(r.data[0].startAt, 754)
+        XCTAssertEqual(r.data[0].segmentStart(forOeuvre: "o1"), 754)
+        XCTAssertNil(r.data[0].segmentStart(forOeuvre: "o2"))
+        XCTAssertNil(r.data[0].segmentStart(forOeuvre: "missing"))
+        XCTAssertNil(r.data[0].oeuvres?.first?.segmentEnd)
+        XCTAssertNil(r.data[1].startAt)
+        XCTAssertNil(r.data[1].oeuvres?.first?.segmentStart)
+        let built = PodcastFeedItem(episodeId: "x", title: "t",
+                                    oeuvres: [.init(id: "o", title: "O", type: "film", segmentStart: 60)],
+                                    startAt: 60)
+        XCTAssertEqual(built.segmentStart(forOeuvre: "o"), 60)
+    }
+
     // MARK: - Platform series / anime (culture-api migration 0134)
 
     func testOeuvreDecodesAnimeAndProviderIds() throws {
