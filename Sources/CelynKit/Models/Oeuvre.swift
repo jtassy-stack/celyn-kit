@@ -98,6 +98,105 @@ public struct Oeuvre: Identifiable, Codable, Sendable, Equatable, Hashable {
     /// (anime, AniList — e.g. Crunchyroll). nil = older server; [] = none.
     /// culture-api migration 0136.
     public var watchLinks: [WatchLink]? = nil
+    /// Games only (culture-api games vertical, IGDB): platform slugs among
+    /// ps5, ps4, xbox-series, xbox-one, switch, switch-2, pc, mac, linux, ios,
+    /// android. nil = unknown / not a game / older server.
+    public var platforms: [String]? = nil
+    /// Games only, on `oeuvres.list(sort: .mentioned / .upcoming)` and
+    /// `oeuvres.get(id:)`: earliest French (Europe, else worldwide) day-precise
+    /// release date across platforms (date-only, decoded at noon UTC).
+    public var releaseDateGameFr: Date? = nil
+    /// Games only, on `oeuvres.list(type: .game, sort: .upcoming)`: the
+    /// earliest release inside the requested window and its platforms.
+    public var upcomingRelease: GameUpcomingRelease? = nil
+    /// Games only, `oeuvres.get(id:)`: main developer studio.
+    public var developer: String? = nil
+    /// Games only, `oeuvres.get(id:)`: IGDB id.
+    public var igdbId: Int? = nil
+    /// Games only, `oeuvres.get(id:)`: every known release (all regions).
+    public var releases: [GameRelease]? = nil
+    /// Games only, `oeuvres.get(id:)`: one release per platform for France
+    /// (Europe else worldwide), soonest first.
+    public var releasesFr: [GameRelease]? = nil
+    /// Games only, `oeuvres.get(id:)`: where to buy / play.
+    public var storeLinks: [GameStoreLink]? = nil
+    /// Games only, `oeuvres.get(id:)`: "Game data by IGDB.com".
+    public var gameDataAttribution: String? = nil
+}
+
+/// A game release on one platform in one region (IGDB).
+public struct GameRelease: Codable, Sendable, Equatable, Hashable {
+    /// Platform slug (ps5, switch-2, pc, …).
+    public let platform: String
+    public var platformName: String? = nil
+    /// "europe", "worldwide", "north_america", "japan", …
+    public var region: String? = nil
+    /// Date-only (noon UTC). nil when not day/month precise or unknown.
+    public var date: Date? = nil
+    /// "day" | "month" | "quarter" | "year" | "tbd".
+    public var precision: String? = nil
+    /// Human-readable IGDB date ("Q4 2026", "Nov 12, 2026", "TBD").
+    public var human: String? = nil
+    public var status: String? = nil
+
+    public init(platform: String, platformName: String? = nil, region: String? = nil, date: Date? = nil, precision: String? = nil, human: String? = nil, status: String? = nil) {
+        self.platform = platform
+        self.platformName = platformName
+        self.region = region
+        self.date = date
+        self.precision = precision
+        self.human = human
+        self.status = status
+    }
+
+    /// True when `date` is an actual day.
+    public var isDayPrecise: Bool { date != nil && (precision == nil || precision == "day") }
+}
+
+/// Earliest upcoming release in a `sort=upcoming&type=game` window.
+public struct GameUpcomingRelease: Codable, Sendable, Equatable, Hashable {
+    public let date: Date
+    public let platforms: [String]
+
+    public init(date: Date, platforms: [String]) {
+        self.date = date
+        self.platforms = platforms
+    }
+}
+
+/// Store page for a game ("steam" | "playstation" | "xbox" | "nintendo" | "epic" | "gog").
+public struct GameStoreLink: Codable, Sendable, Equatable, Hashable {
+    public let store: String
+    public let url: String
+
+    public init(store: String, url: String) {
+        self.store = store
+        self.url = url
+    }
+
+    public var link: URL? { URL(string: url) }
+}
+
+/// A game platform from `oeuvres.gamePlatforms()` (`GET /oeuvres/game-platforms`).
+public struct GamePlatform: Codable, Sendable, Equatable, Hashable, Identifiable {
+    public let slug: String
+    public let name: String
+    public let gameCount: Int
+    public let upcomingCount: Int
+
+    public var id: String { slug }
+
+    public init(slug: String, name: String, gameCount: Int, upcomingCount: Int) {
+        self.slug = slug
+        self.name = name
+        self.gameCount = gameCount
+        self.upcomingCount = upcomingCount
+    }
+}
+
+public struct GamePlatformListResponse: Codable, Sendable {
+    public let data: [GamePlatform]
+    public let count: Int
 }
 
 /// A literary prize selection or win ("Prix Goncourt 2026 · 1re sélection").

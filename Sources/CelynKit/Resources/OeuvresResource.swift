@@ -19,6 +19,8 @@ public struct OeuvresResource: Sendable {
     /// - Parameter providers: FR streaming platform ids or slugs (any of),
     ///   matching offers included with the service (never rent/buy).
     /// - Parameter anime: `true` only anime, `false` exclude anime.
+    /// - Parameter platforms: game platform slugs (any of) — games only.
+    ///   With `type: .game, sort: .upcoming` = upcoming game releases.
     public func list(
         type: OeuvreType? = nil,
         limit: Int? = nil,
@@ -27,9 +29,10 @@ public struct OeuvresResource: Sendable {
         award: String? = nil,
         awarded: Bool? = nil,
         providers: [String] = [],
-        anime: Bool? = nil
+        anime: Bool? = nil,
+        platforms: [String] = []
     ) async throws -> OeuvreListResponse {
-        try await client.get("oeuvres", query: Self.listQuery(type: type, limit: limit, sort: sort, withinDays: withinDays, award: award, awarded: awarded, providers: providers, anime: anime))
+        try await client.get("oeuvres", query: Self.listQuery(type: type, limit: limit, sort: sort, withinDays: withinDays, award: award, awarded: awarded, providers: providers, anime: anime, platforms: platforms))
     }
 
     /// French streaming platforms with at least one included offer, most
@@ -38,6 +41,12 @@ public struct OeuvresResource: Sendable {
         var query: [String: String] = [:]
         if let m = minCount { query["min_count"] = String(m) }
         return try await client.get("oeuvres/providers", query: query)
+    }
+
+    /// Game platforms (ps5, switch-2, pc, …) with game / upcoming counts
+    /// (the "mes consoles" picker).
+    public func gamePlatforms() async throws -> GamePlatformListResponse {
+        try await client.get("oeuvres/game-platforms", query: [:])
     }
 
     /// Query builder for `list`, exposed for tests.
@@ -49,7 +58,8 @@ public struct OeuvresResource: Sendable {
         award: String? = nil,
         awarded: Bool? = nil,
         providers: [String] = [],
-        anime: Bool? = nil
+        anime: Bool? = nil,
+        platforms: [String] = []
     ) -> [String: String] {
         var query: [String: String] = [:]
         if let t = type { query["type"] = t.rawValue }
@@ -61,6 +71,8 @@ public struct OeuvresResource: Sendable {
         let p = providers.map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
         if !p.isEmpty { query["provider"] = p.joined(separator: ",") }
         if let a = anime { query["anime"] = a ? "true" : "false" }
+        let gp = platforms.map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+        if !gp.isEmpty { query["platform"] = gp.joined(separator: ",") }
         return query
     }
 

@@ -622,6 +622,49 @@ final class CelynKitTests: XCTestCase {
         XCTAssertEqual(OeuvresResource.listQuery(anime: false)["anime"], "false")
     }
 
+    // MARK: - Games vertical (IGDB)
+
+    func testGameFieldsDecode() throws {
+        let json = """
+        {"id":"g1","title":"Hollow Knight: Silksong","oeuvreType":"game","platforms":["ps5","switch-2","pc"],
+         "releaseDateGameFr":"2026-11-12","upcomingRelease":{"date":"2026-11-12","platforms":["ps5","pc"]},
+         "developer":"Team Cherry","igdbId":115289,
+         "releases":[{"platform":"ps5","platformName":"PlayStation 5","region":"europe","date":"2026-11-12","precision":"day","human":"Nov 12, 2026","status":null},
+                     {"platform":"switch-2","platformName":"Nintendo Switch 2","region":"worldwide","date":null,"precision":"tbd","human":"TBD","status":null}],
+         "releasesFr":[{"platform":"ps5","platformName":"PlayStation 5","region":"europe","date":"2026-11-12","precision":"day","human":"Nov 12, 2026","status":null}],
+         "storeLinks":[{"store":"steam","url":"https://store.steampowered.com/app/1030300"}],
+         "gameDataAttribution":"Game data by IGDB.com"}
+        """.data(using: .utf8)!
+        let o = try newsDecoder().decode(Oeuvre.self, from: json)
+        XCTAssertEqual(o.oeuvreType, .game)
+        XCTAssertEqual(o.platforms, ["ps5", "switch-2", "pc"])
+        XCTAssertNotNil(o.releaseDateGameFr)
+        XCTAssertEqual(o.upcomingRelease?.platforms, ["ps5", "pc"])
+        XCTAssertEqual(o.developer, "Team Cherry")
+        XCTAssertEqual(o.igdbId, 115289)
+        XCTAssertEqual(o.releases?.count, 2)
+        XCTAssertNil(o.releases?[1].date)
+        XCTAssertFalse(o.releases![1].isDayPrecise)
+        XCTAssertTrue(o.releasesFr![0].isDayPrecise)
+        XCTAssertEqual(o.storeLinks?.first?.link?.host, "store.steampowered.com")
+        XCTAssertEqual(o.gameDataAttribution, "Game data by IGDB.com")
+
+        let old = try newsDecoder().decode(Oeuvre.self, from: #"{"id":"g2","title":"Tetris","oeuvreType":"game","platforms":null}"#.data(using: .utf8)!)
+        XCTAssertNil(old.platforms)
+        XCTAssertNil(old.releasesFr)
+        XCTAssertNil(old.upcomingRelease)
+    }
+
+    func testGamePlatformsDecodeAndQuery() throws {
+        let r = try newsDecoder().decode(GamePlatformListResponse.self, from: #"{"data":[{"slug":"ps5","name":"PlayStation 5","gameCount":120,"upcomingCount":14}],"count":1}"#.data(using: .utf8)!)
+        XCTAssertEqual(r.data.first?.id, "ps5")
+        XCTAssertEqual(r.data.first?.upcomingCount, 14)
+        let q = OeuvresResource.listQuery(type: .game, sort: .upcoming, platforms: ["ps5", " switch-2 ", ""])
+        XCTAssertEqual(q["platform"], "ps5,switch-2")
+        XCTAssertEqual(q["sort"], "upcoming")
+        XCTAssertNil(OeuvresResource.listQuery(type: .game)["platform"])
+    }
+
     // MARK: - TV episodes (culture-api migration 0135)
 
     func testUpcomingEpisodesDecode() throws {
