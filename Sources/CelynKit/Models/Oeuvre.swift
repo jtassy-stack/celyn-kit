@@ -58,6 +58,68 @@ public struct Oeuvre: Identifiable, Codable, Sendable, Equatable, Hashable {
     /// Only on `oeuvres.list(sort: .mentioned / .upcoming)`: currently showing in French
     /// cinemas. nil = not reported (older server or other sort).
     public var nowShowing: Bool? = nil
+    /// Literary prize selections / wins (books; culture-api migration 0132),
+    /// one entry per (prize, year, category) at the best stage reached,
+    /// newest year first. Always sent by `oeuvres.get(id:)` (`[]` when none);
+    /// on `oeuvres.list(sort: .mentioned)` only for oeuvres that have one.
+    /// nil = not reported (older server, other sort, or no award in a list).
+    public var awards: [OeuvreAward]? = nil
+    /// Most recent award announcement (any stage), date-only decoded at noon
+    /// UTC. A recency event for ranking. nil = none / not reported.
+    public var latestAwardAt: Date? = nil
+}
+
+/// A literary prize selection or win ("Prix Goncourt 2026 · 1re sélection").
+public struct OeuvreAward: Codable, Sendable, Equatable, Hashable {
+    public enum Stage: String, Codable, Sendable, Equatable, Hashable, Comparable {
+        case selection1 = "selection_1"
+        case selection2 = "selection_2"
+        case selection3 = "selection_3"
+        case finalist
+        case winner
+        /// A stage this CelynKit version doesn't know yet.
+        case unknown
+
+        public init(from decoder: Decoder) throws {
+            let raw = try decoder.singleValueContainer().decode(String.self)
+            self = Stage(rawValue: raw) ?? .unknown
+        }
+
+        /// selection1 < selection2 < selection3 < finalist < winner (unknown lowest).
+        public var rank: Int {
+            switch self {
+            case .unknown: return 0
+            case .selection1: return 1
+            case .selection2: return 2
+            case .selection3: return 3
+            case .finalist: return 4
+            case .winner: return 5
+            }
+        }
+
+        public static func < (lhs: Stage, rhs: Stage) -> Bool { lhs.rank < rhs.rank }
+    }
+
+    /// Display name, e.g. "Prix Goncourt".
+    public let prize: String
+    /// goncourt | renaudot | femina | medicis | grand-prix-roman-academie-francaise |
+    /// interallie | goncourt-lyceens | prix-du-livre-inter | decembre | wepler | flore
+    public let prizeSlug: String
+    public let year: Int
+    public let stage: Stage
+    /// "roman" (French novel / default), "roman-etranger", "essai".
+    public let category: String
+    /// Announcement date of that stage (date-only, decoded at noon UTC).
+    public let announcedAt: Date?
+
+    public init(prize: String, prizeSlug: String, year: Int, stage: Stage, category: String = "roman", announcedAt: Date? = nil) {
+        self.prize = prize
+        self.prizeSlug = prizeSlug
+        self.year = year
+        self.stage = stage
+        self.category = category
+        self.announcedAt = announcedAt
+    }
 }
 
 /// Lightweight oeuvre reference embedded in events / seances.

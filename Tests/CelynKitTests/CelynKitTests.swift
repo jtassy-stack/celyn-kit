@@ -216,6 +216,58 @@ final class CelynKitTests: XCTestCase {
         XCTAssertNil(b.lastMentionedAt)
     }
 
+    func testOeuvreDecodesAwards() throws {
+        let json = """
+        {"id":"b1","title":"La Maison vide","oeuvreType":"book",
+         "awards":[
+           {"prize":"Prix Femina","prizeSlug":"femina","year":2026,"stage":"selection_1","category":"roman-etranger","announcedAt":"2026-09-08"},
+           {"prize":"Prix Goncourt","prizeSlug":"goncourt","year":2025,"stage":"winner","category":"roman","announcedAt":"2025-11-04"},
+           {"prize":"Prix X","prizeSlug":"x","year":2025,"stage":"shortlist_4","category":"roman","announcedAt":null}
+         ],
+         "latestAwardAt":"2026-09-08"}
+        """.data(using: .utf8)!
+        let o = try newsDecoder().decode(Oeuvre.self, from: json)
+        let awards = try XCTUnwrap(o.awards)
+        XCTAssertEqual(awards.count, 3)
+        XCTAssertEqual(awards[0].prizeSlug, "femina")
+        XCTAssertEqual(awards[0].stage, .selection1)
+        XCTAssertEqual(awards[0].category, "roman-etranger")
+        XCTAssertEqual(awards[1].stage, .winner)
+        XCTAssertEqual(awards[1].prize, "Prix Goncourt")
+        XCTAssertEqual(awards[1].year, 2025)
+        XCTAssertEqual(awards[2].stage, .unknown)
+        XCTAssertNil(awards[2].announcedAt)
+        XCTAssertTrue(OeuvreAward.Stage.winner > .finalist)
+        XCTAssertTrue(OeuvreAward.Stage.selection3 > .selection1)
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "Europe/Paris")!
+        let c = cal.dateComponents([.year, .month, .day], from: try XCTUnwrap(o.latestAwardAt))
+        XCTAssertEqual([c.year, c.month, c.day], [2026, 9, 8])
+        let a1 = cal.dateComponents([.year, .month, .day], from: try XCTUnwrap(awards[1].announcedAt))
+        XCTAssertEqual([a1.year, a1.month, a1.day], [2025, 11, 4])
+
+        let empty = """
+        {"id":"b2","title":"X","oeuvreType":"book","awards":[],"latestAwardAt":null}
+        """.data(using: .utf8)!
+        let e = try newsDecoder().decode(Oeuvre.self, from: empty)
+        XCTAssertEqual(e.awards, [])
+        XCTAssertNil(e.latestAwardAt)
+
+        let absent = """
+        {"id":"b3","title":"Y","oeuvreType":"book"}
+        """.data(using: .utf8)!
+        let a = try newsDecoder().decode(Oeuvre.self, from: absent)
+        XCTAssertNil(a.awards)
+        XCTAssertNil(a.latestAwardAt)
+    }
+
+    func testOeuvresListQueryAwardFilters() {
+        let q = OeuvresResource.listQuery(type: .book, sort: .mentioned, award: "goncourt", awarded: true)
+        XCTAssertEqual(q["award"], "goncourt")
+        XCTAssertEqual(q["awarded"], "true")
+        XCTAssertNil(OeuvresResource.listQuery(awarded: false)["awarded"])
+    }
+
     func testOeuvreDecodesReleaseAndAvailabilitySignals() throws {
         let json = """
         {"id":"o1","title":"Anora","oeuvreType":"film","sourceCount":2,
