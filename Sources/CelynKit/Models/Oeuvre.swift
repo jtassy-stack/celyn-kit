@@ -326,9 +326,11 @@ public extension Oeuvre {
     /// 1. Honour the explicit server hint (`isKidFriendly`) when present —
     ///    `false` is an authoritative veto, `true` an authoritative accept.
     /// 2. Otherwise fall back to the on-device heuristic: scoped to types
-    ///    whose celyn-api kid metadata is reliable (livres, films, podcasts,
-    ///    théâtre, opéra). Music (album / song) is excluded because the API
-    ///    tags rap albums with "Programme scolaire" topics.
+    ///    whose celyn-api kid metadata is reliable (podcasts, théâtre, opéra…).
+    ///    Music (album / song) is excluded because the API tags rap albums
+    ///    with "Programme scolaire" topics; books and films too, because
+    ///    adult novels / films carry "famille" or "scolaire" topics — they
+    ///    are never badged without an explicit server verdict.
     ///
     /// Always read this — never read the stored `isKidFriendly` directly
     /// in UI or services. Doing so bypasses the heuristic fallback for
@@ -336,7 +338,7 @@ public extension Oeuvre {
     var effectiveIsKidFriendly: Bool {
         if let server = isKidFriendly { return server }
         switch oeuvreType {
-        case .album, .song:
+        case .album, .song, .book, .film:
             return false
         default:
             let kidTopics: Set<String> = ["scolaire", "programme scolaire", "enfants", "famille", "jeunesse", "kids", "family"]
