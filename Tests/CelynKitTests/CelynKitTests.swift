@@ -216,6 +216,22 @@ final class CelynKitTests: XCTestCase {
         XCTAssertNil(b.lastMentionedAt)
     }
 
+    func testOeuvreDecodesTrailerExternalUrl() throws {
+        let json = """
+        {"id":"f1","title":"Histoires de la nuit","oeuvreType":"film","trailerUrl":null,
+         "trailerExternalUrl":"https://www.allocine.fr/video/player_gen_cmedia=20638413&cfilm=324014.html"}
+        """.data(using: .utf8)!
+        let o = try newsDecoder().decode(Oeuvre.self, from: json)
+        XCTAssertNil(o.trailerUrl)
+        XCTAssertEqual(o.trailerExternalUrl, "https://www.allocine.fr/video/player_gen_cmedia=20638413&cfilm=324014.html")
+
+        let old = """
+        {"id":"f2","title":"X","oeuvreType":"film","trailerUrl":"https://www.youtube.com/watch?v=abc"}
+        """.data(using: .utf8)!
+        let b = try newsDecoder().decode(Oeuvre.self, from: old)
+        XCTAssertNil(b.trailerExternalUrl)
+    }
+
     func testOeuvreDecodesAwards() throws {
         let json = """
         {"id":"b1","title":"La Maison vide","oeuvreType":"book",

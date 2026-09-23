@@ -67,6 +67,11 @@ public struct Oeuvre: Identifiable, Codable, Sendable, Equatable, Hashable {
     /// Most recent award announcement (any stage), date-only decoded at noon
     /// UTC. A recency event for ranking. nil = none / not reported.
     public var latestAwardAt: Date? = nil
+    /// Films only — a public trailer page that is NOT a YouTube video (today
+    /// an AlloCiné player page, culture-api migration 0133). Cannot be played
+    /// in-app: open it externally, and only when `trailerUrl` is nil
+    /// (`trailerUrl` stays a YouTube watch URL). nil = none / older server.
+    public var trailerExternalUrl: String? = nil
 }
 
 /// A literary prize selection or win ("Prix Goncourt 2026 · 1re sélection").
