@@ -355,4 +355,49 @@ final class CelynKitTests: XCTestCase {
         XCTAssertEqual(response.data.first?.featured, true)
         XCTAssertEqual(response.count, 1)
     }
+
+    // MARK: - Seances
+
+    func testSeanceListQueryIncludesOeuvreId() {
+        let q = SeancesResource.listQuery(oeuvreId: "o1", lat: 48.85, lng: 2.35, radiusKm: 10, limit: 20)
+        XCTAssertEqual(q["oeuvre_id"], "o1")
+        XCTAssertEqual(q["lat"], "48.85")
+        XCTAssertEqual(q["radius_km"], "10.0")
+        XCTAssertEqual(q["limit"], "20")
+        XCTAssertNil(q["venue_id"])
+        XCTAssertNil(SeancesResource.listQuery()["oeuvre_id"])
+    }
+
+    func testSeanceListResponseDecodingFromAPIShape() throws {
+        let json = """
+        {
+            "data": [{
+                "id": "s1", "startsAt": "2026-09-24T18:30:00.000Z", "endsAt": null,
+                "room": "Salle 1", "price": null, "source": "allocine",
+                "oeuvre": {"id": "o1", "title": "Anatomie d'une chute", "type": "film"},
+                "venue": {"id": "v1", "name": "Le Grand Action", "city": "Paris",
+                          "latitude": 48.8492, "longitude": 2.3524, "venueType": "cinema"},
+                "_links": {"recommendations": "/api/recommendations/o1"}
+            }],
+            "count": 1, "syncAt": "2026-09-23T10:00:00.000Z", "isDelta": false,
+            "nextCursor": null, "hasMore": false
+        }
+        """.data(using: .utf8)!
+
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        decoder.dateDecodingStrategy = .custom { decoder in
+            let str = try decoder.singleValueContainer().decode(String.self)
+            guard let d = CultureAPIDateParsing.parse(str) else {
+                throw DecodingError.dataCorruptedError(in: try decoder.singleValueContainer(), debugDescription: "")
+            }
+            return d
+        }
+
+        let response = try decoder.decode(SeanceListResponse.self, from: json)
+        XCTAssertEqual(response.count, 1)
+        XCTAssertEqual(response.data.first?.oeuvre?.id, "o1")
+        XCTAssertEqual(response.data.first?.venue?.name, "Le Grand Action")
+        XCTAssertEqual(response.data.first?.venue?.latitude, 48.8492)
+    }
 }
