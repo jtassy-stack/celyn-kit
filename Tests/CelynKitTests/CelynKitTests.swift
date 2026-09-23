@@ -674,6 +674,40 @@ final class CelynKitTests: XCTestCase {
         XCTAssertNil(b.currentSeasonEpisodes)
     }
 
+    func testEpisodeAirAtAndWatchLinks() throws {
+        let body = """
+        {"data":[{"id":"e1","seasonNumber":2,"episodeNumber":1,"name":null,"overview":null,
+          "airDate":"2026-09-24","airAt":"2026-09-24T01:00:00.000Z","runtime":null,"stillUrl":null,
+          "oeuvre":{"id":"o1","title":"Clevatess","oeuvreType":"tvshow","imageUrl":null,"isAnime":true,
+            "streamingProviderIds":[],"streamingProviders":[],
+            "watchLinks":[{"site":"Crunchyroll","url":"https://www.crunchyroll.com/series/GX"}]}},
+          {"id":"e2","seasonNumber":1,"episodeNumber":3,"name":null,"overview":null,"airDate":"2026-09-25",
+          "airAt":null,"runtime":null,"stillUrl":null,"oeuvre":{"id":"o2","title":"Old","oeuvreType":"tvshow","imageUrl":null,"isAnime":false}}],
+         "count":2,"from":"2026-09-23","to":"2026-09-30","attribution":"x"}
+        """.data(using: .utf8)!
+        let r = try newsDecoder().decode(EpisodeListResponse.self, from: body)
+        let e = r.data[0]
+        XCTAssertEqual(e.airAt, Date(timeIntervalSince1970: 1_790_211_600))
+        XCTAssertEqual(e.oeuvre.watchLinks, [WatchLink(site: "Crunchyroll", url: "https://www.crunchyroll.com/series/GX")])
+        XCTAssertEqual(e.oeuvre.watchLinks?.first?.link?.host, "www.crunchyroll.com")
+        XCTAssertNil(r.data[1].airAt)
+        XCTAssertNil(r.data[1].oeuvre.watchLinks)
+
+        let detail = """
+        {"id":"o1","title":"Clevatess","oeuvreType":"tvshow",
+         "nextEpisode":{"seasonNumber":2,"episodeNumber":1,"name":null,"airDate":"2026-09-24","airAt":"2026-09-24T01:00:00Z"},
+         "watchLinks":[{"site":"Crunchyroll","url":"https://www.crunchyroll.com/series/GX"}]}
+        """.data(using: .utf8)!
+        let o = try newsDecoder().decode(Oeuvre.self, from: detail)
+        XCTAssertEqual(o.nextEpisode?.airAt, Date(timeIntervalSince1970: 1_790_211_600))
+        XCTAssertEqual(o.watchLinks?.count, 1)
+        // Pre-0136 payload: keys absent → nil.
+        let old = """
+        {"seasonNumber":1,"episodeNumber":1,"name":null,"airDate":"2026-09-24"}
+        """.data(using: .utf8)!
+        XCTAssertNil(try newsDecoder().decode(EpisodeSummary.self, from: old).airAt)
+    }
+
     func testUpcomingQuery() throws {
         var cal = Calendar(identifier: .gregorian)
         cal.timeZone = TimeZone(identifier: "UTC")!

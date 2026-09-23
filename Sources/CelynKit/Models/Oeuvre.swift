@@ -94,6 +94,10 @@ public struct Oeuvre: Identifiable, Codable, Sendable, Equatable, Hashable {
     /// tvshow / series only, on `oeuvres.get(id:)`: the current season's
     /// episodes in order. nil = older server / not TV; [] = not enriched yet.
     public var currentSeasonEpisodes: [EpisodeSummary]? = nil
+    /// tvshow / series only, on `oeuvres.get(id:)`: direct streaming links
+    /// (anime, AniList — e.g. Crunchyroll). nil = older server; [] = none.
+    /// culture-api migration 0136.
+    public var watchLinks: [WatchLink]? = nil
 }
 
 /// A literary prize selection or win ("Prix Goncourt 2026 · 1re sélection").
