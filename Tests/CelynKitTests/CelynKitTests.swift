@@ -28,6 +28,11 @@ final class CelynKitTests: XCTestCase {
         XCTAssertNotNil(date)
     }
 
+    func testDateParsingPostgresWithoutTimezoneIsUTC() {
+        let date = CultureAPIDateParsing.parse("2026-09-20 15:55:00")
+        XCTAssertEqual(date, CultureAPIDateParsing.parse("2026-09-20T15:55:00Z"))
+    }
+
     func testDateParsingInvalid() {
         let date = CultureAPIDateParsing.parse("not a date")
         XCTAssertNil(date)

@@ -29,6 +29,17 @@ public enum CultureAPIDateParsing {
         return f
     }()
 
+    /// Raw-SQL aggregates over `timestamp without time zone` columns (e.g.
+    /// `lastMentionedAt` on `sort=mentioned`) bypass Drizzle's Date mapping
+    /// and arrive as bare `YYYY-MM-DD HH:mm:ss`. The DB stores UTC.
+    static let postgresNaive: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd HH:mm:ss"
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.timeZone = TimeZone(secondsFromGMT: 0)
+        return f
+    }()
+
     /// PostgreSQL DATE columns ship as bare `YYYY-MM-DD`. Parsed at noon UTC
     /// (rather than midnight) so re-rendering in any local timezone still
     /// resolves to the intended calendar day — a midnight UTC anchor would
@@ -51,7 +62,8 @@ public enum CultureAPIDateParsing {
         // cannot change which Date comes back.
         if let date = iso8601Fractional.date(from: string)
             ?? iso8601.date(from: string)
-            ?? postgres.date(from: string) {
+            ?? postgres.date(from: string)
+            ?? postgresNaive.date(from: string) {
             return date
         }
         if let dateMidnight = dateOnly.date(from: string) {
