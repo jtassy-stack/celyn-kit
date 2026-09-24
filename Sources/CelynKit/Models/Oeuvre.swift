@@ -122,6 +122,65 @@ public struct Oeuvre: Identifiable, Codable, Sendable, Equatable, Hashable {
     public var storeLinks: [GameStoreLink]? = nil
     /// Games only, `oeuvres.get(id:)`: "Game data by IGDB.com".
     public var gameDataAttribution: String? = nil
+    /// Films, on `oeuvres.list(sort: .mentioned / .upcoming)` and
+    /// `oeuvres.get(id:)`: earliest active screening from now on (UTC).
+    /// nil = none scheduled / not reported (older server, other type).
+    /// culture-api migration 0140; `nowShowing` is derived from it server-side.
+    public var nextScreeningAt: Date? = nil
+    /// Films only, `oeuvres.get(id:)`: the earliest screening and its venue.
+    /// nil = none / older server.
+    public var nextScreening: OeuvreNextScreening? = nil
+    /// Artworks only, `oeuvres.get(id:)`: where the work hangs (Wikidata
+    /// location / collection, matched to a venue when possible).
+    /// nil = unknown / older server / not an artwork.
+    public var location: ArtworkLocation? = nil
+}
+
+/// Films: the next screening on `oeuvres.get(id:)`.
+public struct OeuvreNextScreening: Codable, Sendable, Equatable, Hashable {
+    public let startsAt: Date
+    public var venueId: String? = nil
+    public var venueName: String? = nil
+
+    public init(startsAt: Date, venueId: String? = nil, venueName: String? = nil) {
+        self.startsAt = startsAt
+        self.venueId = venueId
+        self.venueName = venueName
+    }
+}
+
+/// Artworks: where the work can be seen (museum / collection).
+public struct ArtworkLocation: Codable, Sendable, Equatable, Hashable {
+    /// Museum / collection name as given by Wikidata.
+    public let label: String
+    public var wikidataId: String? = nil
+    /// Matched culture-api venue id; nil when no venue matched.
+    public var venueId: String? = nil
+    /// Matched venue (the only source of a city). nil when unmatched.
+    public var venue: ArtworkLocationVenue? = nil
+
+    public init(label: String, wikidataId: String? = nil, venueId: String? = nil, venue: ArtworkLocationVenue? = nil) {
+        self.label = label
+        self.wikidataId = wikidataId
+        self.venueId = venueId
+        self.venue = venue
+    }
+}
+
+public struct ArtworkLocationVenue: Codable, Sendable, Equatable, Hashable {
+    public let id: String
+    public let name: String
+    public var city: String? = nil
+    public var latitude: Double? = nil
+    public var longitude: Double? = nil
+
+    public init(id: String, name: String, city: String? = nil, latitude: Double? = nil, longitude: Double? = nil) {
+        self.id = id
+        self.name = name
+        self.city = city
+        self.latitude = latitude
+        self.longitude = longitude
+    }
 }
 
 /// A game release on one platform in one region (IGDB).
