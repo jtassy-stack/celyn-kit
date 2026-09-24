@@ -11,6 +11,43 @@ import os
 /// or PostgreSQL timestamp formats via `CultureAPIDateParsing.parse`.
 private struct CKEmptyBody: Encodable {}
 
+/// Transport settings the host app can tune. Use with
+/// `CultureAPIClient(apiKey:configuration:)`. Defaults match the legacy
+/// `init(apiKey:timeout:)` except `resourceTimeout` (system default, 7 days,
+/// so a slow-but-progressing download is never cut mid-transfer) and the
+/// version headers (see `clientIdentifier`).
+public struct CultureAPIClientConfiguration: Sendable {
+    /// Idle timeout: max time without receiving any data
+    /// (`timeoutIntervalForRequest`).
+    public var timeout: TimeInterval
+    /// Total time allowed for one request (`timeoutIntervalForResource`).
+    /// nil = system default (7 days).
+    public var resourceTimeout: TimeInterval?
+    /// `httpMaximumConnectionsPerHost`. Only matters over HTTP/1.1.
+    public var maxConnectionsPerHost: Int
+    /// Sent as `x-client` (e.g. "pause", "keskonfe"). When set, `x-app-version`
+    /// carries the host bundle's version, scoped to this client. When nil,
+    /// neither header is sent: the server must treat the build as unknown
+    /// and assume the oldest behaviour.
+    public var clientIdentifier: String?
+    /// `os.Logger` subsystem for the client and its date parsing.
+    public var logSubsystem: String
+
+    public init(
+        timeout: TimeInterval = 15,
+        resourceTimeout: TimeInterval? = nil,
+        maxConnectionsPerHost: Int = 2,
+        clientIdentifier: String? = nil,
+        logSubsystem: String = "io.celyn.kit"
+    ) {
+        self.timeout = timeout
+        self.resourceTimeout = resourceTimeout
+        self.maxConnectionsPerHost = maxConnectionsPerHost
+        self.clientIdentifier = clientIdentifier
+        self.logSubsystem = logSubsystem
+    }
+}
+
 public final class CultureAPIClient: Sendable {
 
     public let baseURL: URL
@@ -50,29 +87,95 @@ public final class CultureAPIClient: Sendable {
     // Dedicated session avoids the nw_connection stale-pool issue that hits
     // URLSession.shared when multiple parallel requests fire on cellular.
     private let session: URLSession
-    private let logger = Logger(subsystem: "io.celyn.kit", category: "CultureAPIClient")
+    private let logger: Logger
+    private let dateLogger: Logger
 
-    public init(
+    /// Version headers sent on every request, precomputed at init.
+    let versionHeaders: [String: String]
+
+    /// Legacy initialiser — behaviour frozen: 2 connections per host, total
+    /// resource timeout `timeout * 2`, and `x-app-version` from the host
+    /// bundle with no `x-client`.
+    public convenience init(
         apiKey: String,
         baseURL: URL = URL(string: "https://celyn.io/api")!,
         timeout: TimeInterval = 15,
         bearerProvider: (@Sendable () -> String?)? = nil
     ) {
+        self.init(
+            apiKey: apiKey,
+            baseURL: baseURL,
+            configuration: CultureAPIClientConfiguration(
+                timeout: timeout,
+                resourceTimeout: timeout * 2,
+                maxConnectionsPerHost: 2
+            ),
+            versionHeaders: ["x-app-version": Self.appVersion],
+            bearerProvider: bearerProvider
+        )
+    }
+
+    public convenience init(
+        apiKey: String,
+        configuration: CultureAPIClientConfiguration,
+        baseURL: URL = URL(string: "https://celyn.io/api")!,
+        bearerProvider: (@Sendable () -> String?)? = nil
+    ) {
+        self.init(
+            apiKey: apiKey,
+            baseURL: baseURL,
+            configuration: configuration,
+            versionHeaders: Self.versionHeaders(clientIdentifier: configuration.clientIdentifier),
+            bearerProvider: bearerProvider
+        )
+    }
+
+    private init(
+        apiKey: String,
+        baseURL: URL,
+        configuration: CultureAPIClientConfiguration,
+        versionHeaders: [String: String],
+        bearerProvider: (@Sendable () -> String?)?
+    ) {
         self.apiKey = apiKey
         self.baseURL = baseURL
-        self.timeout = timeout
+        self.timeout = configuration.timeout
         self.bearerProvider = bearerProvider
+        self.versionHeaders = versionHeaders
+        self.logger = Logger(subsystem: configuration.logSubsystem, category: "CultureAPIClient")
+        self.dateLogger = Logger(subsystem: configuration.logSubsystem, category: "DateParsing")
 
         let config = URLSessionConfiguration.default
         // Don't wait indefinitely for connectivity — fail fast and let the
         // caller surface an error rather than blocking for the full timeout.
         config.waitsForConnectivity = false
-        config.timeoutIntervalForRequest = timeout
-        config.timeoutIntervalForResource = timeout * 2
-        // Cap at 2 to avoid saturating the server with parallel TLS handshakes,
-        // which causes nw_endpoint_flow failures on cellular/weak wifi.
-        config.httpMaximumConnectionsPerHost = 2
+        config.timeoutIntervalForRequest = configuration.timeout
+        if let resourceTimeout = configuration.resourceTimeout {
+            config.timeoutIntervalForResource = resourceTimeout
+        }
+        // Default 2 avoids saturating the server with parallel TLS handshakes,
+        // which caused nw_endpoint_flow failures on cellular/weak wifi (b36c4c5).
+        config.httpMaximumConnectionsPerHost = configuration.maxConnectionsPerHost
         self.session = URLSession(configuration: config)
+    }
+
+    /// `x-client` + `x-app-version` for an identified client; nothing at all
+    /// otherwise, so a version from another app's version space never reaches
+    /// server-side version rules.
+    static func versionHeaders(clientIdentifier: String?) -> [String: String] {
+        guard let id = clientIdentifier, !id.isEmpty else { return [:] }
+        return ["x-client": id, "x-app-version": appVersion]
+    }
+
+    private func applyCommonHeaders(to request: inout URLRequest) {
+        request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
+        for (field, value) in versionHeaders {
+            request.setValue(value, forHTTPHeaderField: field)
+        }
+        request.setValue(Self.acceptLanguage, forHTTPHeaderField: "Accept-Language")
+        if let token = bearerProvider?(), !token.isEmpty {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
     }
 
     /// True when an API key has been provided. Calling `get` without a key
@@ -105,12 +208,7 @@ public final class CultureAPIClient: Sendable {
         }
 
         var request = URLRequest(url: url)
-        request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
-        request.setValue(Self.appVersion, forHTTPHeaderField: "x-app-version")
-        request.setValue(Self.acceptLanguage, forHTTPHeaderField: "Accept-Language")
-        if let token = bearerProvider?(), !token.isEmpty {
-            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        }
+        applyCommonHeaders(to: &request)
         request.timeoutInterval = timeout
         // celyn.io doesn't support QUIC — skip the Connection refused + TLS
         // fallback round-trip that adds ~200ms on every cold start.
@@ -130,7 +228,7 @@ public final class CultureAPIClient: Sendable {
         }
 
         do {
-            return try Self.jsonDecoder().decode(T.self, from: data)
+            return try jsonDecoder().decode(T.self, from: data)
         } catch {
             let body = String(data: data, encoding: .utf8) ?? ""
             logger.error("GET \(url.path) decode error: \(error) — body: \(body)")
@@ -140,12 +238,13 @@ public final class CultureAPIClient: Sendable {
 
     /// JSON decoder configured for the API's wire format (custom date parsing +
     /// snake_case → camelCase). Shared by `get` and `getPublic`.
-    private static func jsonDecoder() -> JSONDecoder {
+    private func jsonDecoder() -> JSONDecoder {
+        let dateLogger = self.dateLogger
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .custom { decoder in
             let container = try decoder.singleValueContainer()
             let str = try container.decode(String.self)
-            if let date = CultureAPIDateParsing.parse(str) { return date }
+            if let date = CultureAPIDateParsing.parse(str, logger: dateLogger) { return date }
             throw DecodingError.dataCorruptedError(
                 in: container,
                 debugDescription: "Cannot parse date string '\(str)'"
@@ -195,7 +294,7 @@ public final class CultureAPIClient: Sendable {
             throw CultureAPIError.httpError(statusCode: http.statusCode, body: body)
         }
         do {
-            return try Self.jsonDecoder().decode(T.self, from: data)
+            return try jsonDecoder().decode(T.self, from: data)
         } catch {
             let body = String(data: data, encoding: .utf8) ?? ""
             logger.error("GET \(url.path) decode error: \(error) — body: \(body)")
@@ -248,12 +347,7 @@ public final class CultureAPIClient: Sendable {
         var request = URLRequest(url: url)
         request.httpMethod = method
         request.httpBody = payload
-        request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
-        request.setValue(Self.appVersion, forHTTPHeaderField: "x-app-version")
-        request.setValue(Self.acceptLanguage, forHTTPHeaderField: "Accept-Language")
-        if let token = bearerProvider?(), !token.isEmpty {
-            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        }
+        applyCommonHeaders(to: &request)
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.timeoutInterval = timeout
         request.assumesHTTP3Capable = false
@@ -269,17 +363,7 @@ public final class CultureAPIClient: Sendable {
             throw CultureAPIError.httpError(statusCode: http.statusCode, body: body)
         }
 
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .custom { decoder in
-            let container = try decoder.singleValueContainer()
-            let str = try container.decode(String.self)
-            if let date = CultureAPIDateParsing.parse(str) { return date }
-            throw DecodingError.dataCorruptedError(
-                in: container,
-                debugDescription: "Cannot parse date string '\(str)'"
-            )
-        }
-        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        let decoder = jsonDecoder()
 
         do {
             return try decoder.decode(Res.self, from: data)
