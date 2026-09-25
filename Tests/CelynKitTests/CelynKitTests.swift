@@ -232,6 +232,29 @@ final class CelynKitTests: XCTestCase {
         XCTAssertNil(b.trailerExternalUrl)
     }
 
+    func testOeuvreDecodesEditorialRanks() throws {
+        let json = """
+        {"id":"t1","title":"The Sopranos","oeuvreType":"tvshow",
+         "editorialRanks":[
+           {"list":"nyt-best-tv-21st-century","tier":"top10"},
+           {"list":"some-future-list","tier":"top3"}
+         ]}
+        """.data(using: .utf8)!
+        let o = try newsDecoder().decode(Oeuvre.self, from: json)
+        let ranks = try XCTUnwrap(o.editorialRanks)
+        XCTAssertEqual(ranks.count, 2)
+        XCTAssertEqual(ranks[0], EditorialRank(list: EditorialRank.nytBestTV21stCentury, tier: .top10))
+        XCTAssertEqual(ranks[1].list, "some-future-list")
+        XCTAssertEqual(ranks[1].tier, .unknown)
+        XCTAssertTrue(EditorialRank.Tier.top10 > .top25)
+        XCTAssertTrue(EditorialRank.Tier.top100 > .unknown)
+
+        let absent = """
+        {"id":"t2","title":"Y","oeuvreType":"tvshow"}
+        """.data(using: .utf8)!
+        XCTAssertNil(try newsDecoder().decode(Oeuvre.self, from: absent).editorialRanks)
+    }
+
     func testOeuvreDecodesAwards() throws {
         let json = """
         {"id":"b1","title":"La Maison vide","oeuvreType":"book",

@@ -134,6 +134,56 @@ public struct Oeuvre: Identifiable, Codable, Sendable, Equatable, Hashable {
     /// location / collection, matched to a venue when possible).
     /// nil = unknown / older server / not an artwork.
     public var location: ArtworkLocation? = nil
+    /// Editorial "best of" list placements (series today: the NYT "100 Best TV
+    /// Shows of the 21st Century"). A ranking signal only: an editorial
+    /// compilation, not meant to be displayed. Omitted by the server when empty.
+    /// nil = none / older server.
+    public var editorialRanks: [EditorialRank]? = nil
+}
+
+/// A placement on an editorial ranking list, bucketed by tier.
+public struct EditorialRank: Codable, Sendable, Equatable, Hashable {
+    /// Rank bucket on the list. `unknown` = a tier this CelynKit version doesn't know yet.
+    public enum Tier: String, Codable, Sendable, Equatable, Hashable, Comparable {
+        case top10
+        case top25
+        case top50
+        case top100
+        case unknown
+
+        public init(from decoder: Decoder) throws {
+            let raw = try decoder.singleValueContainer().decode(String.self)
+            self = Tier(rawValue: raw) ?? .unknown
+        }
+
+        /// top100 < top50 < top25 < top10 (unknown lowest).
+        public var rank: Int {
+            switch self {
+            case .unknown: return 0
+            case .top100: return 1
+            case .top50: return 2
+            case .top25: return 3
+            case .top10: return 4
+            }
+        }
+
+        public static func < (lhs: Tier, rhs: Tier) -> Bool { lhs.rank < rhs.rank }
+    }
+
+    /// List slug, e.g. "nyt-best-tv-21st-century". Kept as a String so future
+    /// lists decode without an SDK update.
+    public let list: String
+    public let tier: Tier
+
+    public init(list: String, tier: Tier) {
+        self.list = list
+        self.tier = tier
+    }
+}
+
+/// Well-known `EditorialRank.list` slugs.
+public extension EditorialRank {
+    static let nytBestTV21stCentury = "nyt-best-tv-21st-century"
 }
 
 /// Films: the next screening on `oeuvres.get(id:)`.
