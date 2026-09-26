@@ -208,6 +208,10 @@ public struct NewsStoryDetail: Identifiable, Codable, Sendable, Equatable {
     public let sources: [NewsStorySource]
     /// ALL member events, oldest-first — no cap.
     public let events: [NewsEvent]
+    /// Cross-source consensus digest. nil when the server has none for this
+    /// story (field absent) or when it fails to decode — a malformed digest
+    /// never blanks the story detail.
+    public let consensus: NewsConsensus?
 
     public init(
         id: String,
@@ -221,7 +225,8 @@ public struct NewsStoryDetail: Identifiable, Codable, Sendable, Equatable {
         lastUpdateAt: Date,
         status: String,
         sources: [NewsStorySource] = [],
-        events: [NewsEvent] = []
+        events: [NewsEvent] = [],
+        consensus: NewsConsensus? = nil
     ) {
         self.id = id
         self.title = title
@@ -235,6 +240,29 @@ public struct NewsStoryDetail: Identifiable, Codable, Sendable, Equatable {
         self.status = status
         self.sources = sources
         self.events = events
+        self.consensus = consensus
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, title, primaryKind, entityTokens, confidenceScore, eventCount
+        case sourceCount, firstSeenAt, lastUpdateAt, status, sources, events, consensus
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        title = try c.decode(String.self, forKey: .title)
+        primaryKind = try c.decodeIfPresent(NewsEventKind.self, forKey: .primaryKind)
+        entityTokens = try c.decodeIfPresent([String].self, forKey: .entityTokens) ?? []
+        confidenceScore = try c.decode(Double.self, forKey: .confidenceScore)
+        eventCount = try c.decode(Int.self, forKey: .eventCount)
+        sourceCount = try c.decode(Int.self, forKey: .sourceCount)
+        firstSeenAt = try c.decode(Date.self, forKey: .firstSeenAt)
+        lastUpdateAt = try c.decode(Date.self, forKey: .lastUpdateAt)
+        status = try c.decode(String.self, forKey: .status)
+        sources = try c.decodeIfPresent([NewsStorySource].self, forKey: .sources) ?? []
+        events = try c.decodeIfPresent([NewsEvent].self, forKey: .events) ?? []
+        consensus = (try? c.decodeIfPresent(NewsConsensus.self, forKey: .consensus)) ?? nil
     }
 }
 
