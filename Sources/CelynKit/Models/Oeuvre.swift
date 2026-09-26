@@ -543,6 +543,14 @@ public struct StreamingPlatformListResponse: Codable, Sendable {
 }
 
 /// A critic's opinion sourced from a podcast/radio/YouTube segment.
+///
+/// `opinionSummary` (non-blank) and `sentiment` are guaranteed: culture-api
+/// never publishes an opinion without them. Older API rows did — Game of
+/// Thrones shipped `opinions[5].opinionSummary = null` (2026-09) and the
+/// strict array decode failed the WHOLE `Oeuvre`. So `Oeuvre.opinions` decodes
+/// lossily: an opinion that fails to decode (null summary / sentiment, bad
+/// shape) or has a blank summary is dropped, never the œuvre — see
+/// `KeyedDecodingContainer.decodeIfPresent(_: [OeuvreOpinion].Type, forKey:)`.
 public struct OeuvreOpinion: Codable, Sendable, Equatable, Hashable {
     public let criticName: String?
     public let opinionSummary: String
@@ -556,6 +564,36 @@ public struct OeuvreOpinion: Codable, Sendable, Equatable, Hashable {
     public let segmentEnd: Int?
     public let audioUrl: String?
     public let episodeId: String?
+}
+
+/// Steps over an array element that failed to decode:
+/// `UnkeyedDecodingContainer` only advances on a successful decode.
+private struct SkippedElement: Decodable {
+    init(from decoder: Decoder) throws {}
+}
+
+extension KeyedDecodingContainer {
+    /// Lossy `[OeuvreOpinion]` decoding. More specific than the generic
+    /// `decodeIfPresent`, so the synthesized `Oeuvre.init(from:)` binds its
+    /// `opinions` property to it (pinned by `OpinionsLossyDecodingTests`).
+    /// Drops each opinion that fails to decode or has a blank summary instead
+    /// of throwing; `nil` when the key is absent, `null` or not an array.
+    func decodeIfPresent(_ type: [OeuvreOpinion].Type, forKey key: Key) throws -> [OeuvreOpinion]? {
+        guard contains(key), try !decodeNil(forKey: key),
+              var elements = try? nestedUnkeyedContainer(forKey: key)
+        else { return nil }
+        var opinions: [OeuvreOpinion] = []
+        while !elements.isAtEnd {
+            if let opinion = try? elements.decode(OeuvreOpinion.self) {
+                if !opinion.opinionSummary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    opinions.append(opinion)
+                }
+            } else {
+                _ = try elements.decode(SkippedElement.self)
+            }
+        }
+        return opinions
+    }
 }
 
 public struct OeuvreListResponse: Codable, Sendable {
