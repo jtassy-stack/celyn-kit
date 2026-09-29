@@ -1,0 +1,43 @@
+name: CelynKit freshness
+description: >-
+  Compares the celyn-kit version pinned in the app's Package.resolved with the
+  latest celyn-kit release tag. mode=warn only annotates; mode=enforce fails
+  the job when behind, unless allow-stale is "1".
+inputs:
+  mode:
+    description: "warn (TestFlight, dry runs) or enforce (App Store submission)"
+    required: false
+    default: warn
+  allow-stale:
+    description: 'Explicit waiver for enforce mode: "1" turns a failure into a warning (e.g. vars.CELYNKIT_ALLOW_STALE)'
+    required: false
+    default: ""
+  resolved:
+    description: "Path to Package.resolved (default: the single *.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved)"
+    required: false
+    default: ""
+  working-directory:
+    description: "Directory of the app checkout"
+    required: false
+    default: "."
+runs:
+  using: composite
+  steps:
+    - name: Check celyn-kit pin against the latest release
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        MODE: ${{ inputs.mode }}
+        CELYNKIT_ALLOW_STALE: ${{ inputs.allow-stale }}
+        RESOLVED: ${{ inputs.resolved }}
+        CHECK: ${{ github.action_path }}/check.mjs
+      run: |
+        set -euo pipefail
+        args=()
+        case "$MODE" in
+          warn) args+=(--warn) ;;
+          enforce) ;;
+          *) echo "::error::celynkit-freshness: mode must be warn or enforce (got '$MODE')"; exit 1 ;;
+        esac
+        [[ -n "$RESOLVED" ]] && args+=(--resolved "$RESOLVED")
+        node "$CHECK" "${args[@]}"

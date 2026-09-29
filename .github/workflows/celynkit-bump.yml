@@ -1,0 +1,218 @@
+name: CelynKit bump (reusable)
+
+# Shared by every app consuming CelynKit. Called daily by a thin workflow in
+# each app: if a newer celyn-kit release exists than the one project.yml asks
+# for, bump it, refresh Package.resolved, prove the app still compiles
+# (build-for-testing), and open a PR on branch chore/celynkit-<version>.
+# If the build fails, the PR is still opened, as a DRAFT, and the run fails:
+# the owner sees the delta instead of a silent red cron.
+#
+# Caller (in the app repo, e.g. .github/workflows/celynkit-bump.yml):
+#
+#   on:
+#     schedule: [{ cron: "0 6 * * *" }]
+#     workflow_dispatch:
+#       inputs: { version: { description: "tag (empty = latest)", required: false, default: "" } }
+#   jobs:
+#     bump:
+#       permissions: { contents: write, pull-requests: write }
+#       uses: jtassy-stack/celyn-kit/.github/workflows/celynkit-bump.yml@<sha or tag>
+#       with: { xcodeproj: App.xcodeproj, scheme: App, xcconfig-path: App/Resources/Secrets.xcconfig, xcconfig-keys: CULTURE_API_KEY, version: "${{ inputs.version }}" }
+#
+# The app repo needs Settings > Actions > General > "Allow GitHub Actions to
+# create and approve pull requests". A PR opened with GITHUB_TOKEN does not
+# start other workflows: the build here is the check, the PR body says so.
+on:
+  workflow_call:
+    inputs:
+      xcodeproj:
+        description: "Xcode project path (e.g. Keskonfe.xcodeproj)"
+        type: string
+        required: true
+      scheme:
+        description: "Scheme to build-for-testing"
+        type: string
+        required: true
+      xcodegen:
+        description: "true: bump project.yml and run xcodegen; false: bump the pbxproj package requirement directly"
+        type: boolean
+        default: true
+      project-yml:
+        description: "XcodeGen spec path"
+        type: string
+        default: project.yml
+      destination:
+        description: "xcodebuild destination"
+        type: string
+        default: "generic/platform=iOS Simulator"
+      runner:
+        description: "macOS runner label"
+        type: string
+        default: macos-15
+      select-latest-xcode:
+        description: "xcode-select the newest /Applications/Xcode*.app"
+        type: boolean
+        default: true
+      xcconfig-path:
+        description: "Gitignored secrets xcconfig the build needs to exist (empty = none)"
+        type: string
+        default: ""
+      xcconfig-keys:
+        description: "Comma-separated keys written with a compile-only placeholder value"
+        type: string
+        default: "CULTURE_API_KEY"
+      base-branch:
+        description: "Base branch of the PR (empty = repository default branch)"
+        type: string
+        default: ""
+      version:
+        description: "celyn-kit tag to bump to (empty = latest release tag)"
+        type: string
+        default: ""
+
+concurrency:
+  group: celynkit-bump-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  detect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      target: ${{ steps.pick.outputs.target }}
+    steps:
+      - uses: actions/checkout@v4
+      # The logic lives once in celyn-kit, at the exact ref the caller pinned.
+      - uses: actions/checkout@v4
+        with:
+          repository: jtassy-stack/celyn-kit
+          ref: ${{ job.workflow_sha }}
+          path: .celyn-kit
+      - id: pick
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+          PROJECT_YML: ${{ inputs.project-yml }}
+          XCODEPROJ: ${{ inputs.xcodeproj }}
+          XCODEGEN: ${{ inputs.xcodegen }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if [[ "$XCODEGEN" == "true" ]]; then
+            CURRENT="$(python3 .celyn-kit/.github/scripts/celynkit_requirement.py get "$PROJECT_YML")"
+          else
+            CURRENT="$(python3 .celyn-kit/.github/scripts/celynkit_requirement.py get "$XCODEPROJ/project.pbxproj")"
+          fi
+          LATEST="$(node .celyn-kit/.github/actions/celynkit-freshness/check.mjs --print-latest)"
+          TARGET="${INPUT_VERSION:-$LATEST}"
+          echo "app asks for: $CURRENT, target: $TARGET"
+          if [[ -z "$TARGET" || "$TARGET" == "$CURRENT" ]]; then
+            echo "target=" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          # A bump PR for this target is already open (possibly opened by hand): nothing to do.
+          if [[ -n "$(gh pr list --state open --head "chore/celynkit-$TARGET" --json number -q '.[0].number')" ]]; then
+            echo "PR already open for $TARGET"; echo "target=" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          echo "target=$TARGET" >> "$GITHUB_OUTPUT"
+
+  bump:
+    needs: detect
+    if: needs.detect.outputs.target != ''
+    runs-on: ${{ inputs.runner }}
+    timeout-minutes: 45
+    env:
+      TARGET: ${{ needs.detect.outputs.target }}
+      GH_TOKEN: ${{ github.token }}
+      XCODEPROJ: ${{ inputs.xcodeproj }}
+      SCHEME: ${{ inputs.scheme }}
+      PROJECT_YML: ${{ inputs.project-yml }}
+      XCODEGEN: ${{ inputs.xcodegen }}
+      XCCONFIG_PATH: ${{ inputs.xcconfig-path }}
+      XCCONFIG_KEYS: ${{ inputs.xcconfig-keys }}
+      BASE: ${{ inputs.base-branch || github.event.repository.default_branch }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: jtassy-stack/celyn-kit
+          ref: ${{ job.workflow_sha }}
+          path: .celyn-kit
+
+      - name: Select latest Xcode
+        if: inputs.select-latest-xcode
+        run: |
+          XCODE_PATH=$(find /Applications -maxdepth 1 -name "Xcode*.app" | sort -V | tail -1)
+          sudo xcode-select -s "$XCODE_PATH"
+          xcodebuild -version
+
+      - name: Install xcodegen
+        if: inputs.xcodegen
+        run: brew install xcodegen
+
+      - name: Bump the CelynKit requirement
+        run: |
+          set -euo pipefail
+          if [[ "$XCODEGEN" == "true" ]]; then F="$PROJECT_YML"; else F="$XCODEPROJ/project.pbxproj"; fi
+          python3 .celyn-kit/.github/scripts/celynkit_requirement.py set "$F" "$TARGET"
+          git diff --stat
+
+      - name: Write placeholder secrets xcconfig (compile only)
+        if: inputs.xcconfig-path != ''
+        run: |
+          set -euo pipefail
+          mkdir -p "$(dirname "$XCCONFIG_PATH")"
+          : > "$XCCONFIG_PATH"
+          IFS=',' read -ra KEYS <<< "$XCCONFIG_KEYS"
+          for k in "${KEYS[@]}"; do
+            k="$(echo "$k" | xargs)"; [[ -n "$k" ]] && printf '%s = ci-compile-only\n' "$k" >> "$XCCONFIG_PATH"
+          done
+
+      - name: Regenerate project
+        if: inputs.xcodegen
+        run: xcodegen generate --spec "$PROJECT_YML"
+
+      - name: Clean stale SPM binary-artifacts cache
+        run: rm -rf ~/Library/Caches/org.swift.swiftpm/artifacts
+
+      - name: Resolve packages
+        run: xcodebuild -resolvePackageDependencies -project "$XCODEPROJ" -scheme "$SCHEME"
+
+      - name: Prove it compiles (app + tests)
+        id: build
+        continue-on-error: true
+        env:
+          DESTINATION: ${{ inputs.destination }}
+        run: |
+          xcodebuild build-for-testing -project "$XCODEPROJ" -scheme "$SCHEME" \
+            -destination "$DESTINATION" -quiet
+
+      - name: Open the PR
+        env:
+          BUILD_OUTCOME: ${{ steps.build.outcome }}
+        run: |
+          set -euo pipefail
+          [[ -n "$XCCONFIG_PATH" ]] && rm -f "$XCCONFIG_PATH"
+          rm -rf .celyn-kit
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          BR="chore/celynkit-$TARGET"
+          git checkout -b "$BR"
+          if [[ "$XCODEGEN" == "true" ]]; then git add "$PROJECT_YML"; fi
+          git add "$XCODEPROJ"
+          git commit -m "chore(deps): CelynKit $TARGET"
+          git push -u origin "$BR"
+          if [[ "$BUILD_OUTCOME" == "success" ]]; then
+            DRAFT=(); STATUS="\`xcodebuild build-for-testing\` (app + tests, $SCHEME) : OK dans ce workflow."
+          else
+            DRAFT=(--draft); STATUS="**\`xcodebuild build-for-testing\` ÉCHOUE** avec cette version : PR en brouillon, adaptation du code nécessaire (voir le run $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)."
+          fi
+          gh pr create "${DRAFT[@]}" --base "$BASE" --head "$BR" \
+            --title "chore(deps): CelynKit $TARGET" \
+            --body "Bump automatique de CelynKit vers **$TARGET** (workflow partagé \`celyn-kit/.github/workflows/celynkit-bump.yml\`).
+
+          - Exigence CelynKit portée à \`$TARGET\`, \`Package.resolved\` régénéré.
+          - $STATUS
+          - Les tests ne sont **pas** exécutés ici et cette PR ne déclenche pas d'autre CI (PR ouverte avec GITHUB_TOKEN) : lancer la suite localement ou relancer la PR avant merge.
+          - Notes de version : https://github.com/jtassy-stack/celyn-kit/releases/tag/$TARGET"
+          if [[ "$BUILD_OUTCOME" != "success" ]]; then
+            echo "::error::build-for-testing failed against CelynKit $TARGET (draft PR opened)"; exit 1
+          fi
