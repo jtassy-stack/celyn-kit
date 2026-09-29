@@ -1,0 +1,70 @@
+name: Consumers
+
+# Does a change to the kit still compile in the apps that consume it? Builds
+# Keskonfé (app + tests, no test run) against THIS branch of the kit, by
+# swapping its SwiftPM dependency for a local path.
+#
+# Needs two repository secrets, otherwise the job reports "skipped" and passes:
+#   CONSUMER_REPO_TOKEN  a token with read access to jtassy-stack/keskonfe
+#   (CULTURE_API_KEY is optional: a dummy key is enough to compile)
+on:
+  pull_request:
+    paths:
+      - "Sources/**"
+      - "Package.swift"
+  workflow_dispatch:
+
+concurrency:
+  group: consumers-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  keskonfe:
+    runs-on: macos-latest
+    timeout-minutes: 45
+    env:
+      HAS_TOKEN: ${{ secrets.CONSUMER_REPO_TOKEN != '' }}
+    steps:
+      - name: Skip notice
+        if: env.HAS_TOKEN != 'true'
+        run: echo "::notice::CONSUMER_REPO_TOKEN is not set - consumer build skipped."
+
+      - uses: actions/checkout@v4
+        if: env.HAS_TOKEN == 'true'
+        with:
+          path: kit
+
+      - uses: actions/checkout@v4
+        if: env.HAS_TOKEN == 'true'
+        with:
+          repository: jtassy-stack/keskonfe
+          token: ${{ secrets.CONSUMER_REPO_TOKEN }}
+          path: keskonfe
+
+      - name: Point Keskonfé at this branch of the kit
+        if: env.HAS_TOKEN == 'true'
+        working-directory: keskonfe
+        run: |
+          set -euo pipefail
+          brew install xcodegen
+          python3 - <<'PY'
+          import re
+          p='project.yml'; s=open(p).read()
+          new,n=re.subn(r'(CelynKit:\n)\s+url: [^\n]+\n\s+from: [^\n]+', r'\1    path: ../kit', s, count=1)
+          assert n==1, 'CelynKit package block not found in keskonfe/project.yml'
+          open(p,'w').write(new)
+          PY
+          printf 'CULTURE_API_KEY = %s\n' "${CULTURE_API_KEY:-ci-compile-only}" > Keskonfe/Resources/Secrets.xcconfig
+          xcodegen generate
+        env:
+          CULTURE_API_KEY: ${{ secrets.CULTURE_API_KEY }}
+
+      - name: Build Keskonfé against the branch
+        if: env.HAS_TOKEN == 'true'
+        working-directory: keskonfe
+        run: |
+          xcodebuild build-for-testing -project Keskonfe.xcodeproj -scheme Keskonfe \
+            -destination 'generic/platform=iOS Simulator' -quiet

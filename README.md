@@ -59,3 +59,11 @@ let mine: MyEvent = try await client.get("events/abc")
 swift build
 swift test
 ```
+
+## Releases and consumers
+
+- **CI**: every PR builds and tests the package (`.github/workflows/ci.yml`).
+- **Releases are automatic.** A merge that changes `Sources/` or `Package.swift` is tested, then tagged and published by `.github/workflows/release.yml`. The bump comes from conventional commit subjects since the last tag (`scripts/next-version.sh`): `feat:` → minor, `fix:`/other → patch, `type!:` or a `BREAKING CHANGE` body → major. Docs/CI/test-only merges do not release; add `[skip release]` to the merge commit to skip one on purpose.
+- **Apps follow the kit**: Keskonfé's `celynkit-bump` workflow opens a PR when a newer tag exists, and its App Store submit refuses to ship a stale kit.
+- **Kit changes are checked against an app before they land**: `.github/workflows/consumers.yml` builds Keskonfé against the PR branch (needs the `CONSUMER_REPO_TOKEN` secret; without it the job is skipped).
+- **Where fixes go**: model, decoding and API-call fixes are made here first, then the apps bump the version. Do not patch DTOs app-side.
