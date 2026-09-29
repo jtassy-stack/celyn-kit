@@ -28,7 +28,9 @@ public enum NewsEventKind: String, Codable, Sendable, CaseIterable {
 
 /// One contributing outlet/programme behind a story — the vertical's
 /// "who's covering this" chip.
-public struct NewsStorySource: Codable, Sendable, Equatable {
+public struct NewsStorySource: Identifiable, Codable, Sendable, Hashable {
+    /// Stable key for SwiftUI lists: source type + label.
+    public var id: String { "\(sourceType)-\(label)" }
     public let sourceType: String
     public let label: String
     public let count: Int
@@ -40,7 +42,7 @@ public struct NewsStorySource: Codable, Sendable, Equatable {
     }
 }
 
-public struct NewsStory: Identifiable, Codable, Sendable, Equatable {
+public struct NewsStory: Identifiable, Codable, Sendable, Hashable {
     public let id: String
     public let title: String
     public let primaryKind: NewsEventKind?
@@ -97,7 +99,9 @@ public enum NewsFactCheckVerdict: String, Codable, Sendable, CaseIterable {
 
 /// One claim-level fact-check verdict attached to a `NewsEvent`, checked
 /// against Wikipedia.
-public struct NewsFactCheck: Codable, Sendable, Equatable {
+public struct NewsFactCheck: Identifiable, Codable, Sendable, Equatable {
+    /// The claim text — unique within an event.
+    public var id: String { claim }
     public let claim: String
     public let subject: String
     public let verdict: NewsFactCheckVerdict

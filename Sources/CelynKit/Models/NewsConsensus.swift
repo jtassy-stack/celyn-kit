@@ -45,11 +45,33 @@ public enum NewsConsensusStatus: String, Codable, Sendable, CaseIterable {
 /// One outlet backing a claim, with a link to its article.
 public struct NewsConsensusSource: Codable, Sendable, Equatable, Hashable {
     public let name: String
+    /// Article URL as sent by the server. `""` when the source has no URL
+    /// (the server may send `""` or `null`) — use `link` to open it.
     public let url: String
 
     public init(name: String, url: String) {
         self.name = name
         self.url = url
+    }
+
+    private enum CodingKeys: String, CodingKey { case name, url }
+
+    /// Tolerates a missing, `null` or `""` url (decoded as `""`) so one
+    /// URL-less source never drops the whole digest.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        name = try c.decode(String.self, forKey: .name)
+        url = try c.decodeIfPresent(String.self, forKey: .url) ?? ""
+    }
+
+    /// The article link, only when it is an absolute http(s) URL — nil for
+    /// `""`, relative paths or any other scheme (javascript:, file:, …), in
+    /// which case clients should render the source name as plain text.
+    public var link: URL? {
+        guard !url.isEmpty, let u = URL(string: url), u.host != nil,
+              let scheme = u.scheme?.lowercased(),
+              scheme == "https" || scheme == "http" else { return nil }
+        return u
     }
 }
 
@@ -63,6 +85,9 @@ public struct NewsConsensusFact: Identifiable, Codable, Sendable, Equatable {
     public let sources: [NewsConsensusSource]
     /// 0...1 — how specific/informative the claim is.
     public let informativeness: Double
+
+    /// French label for `independentSources`: « 1 source », « 3 sources ».
+    public var independentSourcesLabelFR: String { NewsConsensus.sourcesLabelFR(independentSources) }
 
     public init(
         id: String,
@@ -126,23 +151,28 @@ public struct NewsConsensus: Codable, Sendable, Equatable {
     /// Server order: confirmed first, then informativeness, then source count.
     public let facts: [NewsConsensusFact]
     public let contested: [NewsContestedPoint]
+    /// Number of distinct outlets behind the digest. nil when the server
+    /// does not send it (older culture-api builds).
+    public let outletCount: Int?
 
     public init(
         generatedAt: Date,
         eventCount: Int,
         independentSourceCount: Int,
         facts: [NewsConsensusFact] = [],
-        contested: [NewsContestedPoint] = []
+        contested: [NewsContestedPoint] = [],
+        outletCount: Int? = nil
     ) {
         self.generatedAt = generatedAt
         self.eventCount = eventCount
         self.independentSourceCount = independentSourceCount
         self.facts = facts
         self.contested = contested
+        self.outletCount = outletCount
     }
 
     private enum CodingKeys: String, CodingKey {
-        case generatedAt, eventCount, independentSourceCount, facts, contested
+        case generatedAt, eventCount, independentSourceCount, facts, contested, outletCount
     }
 
     public init(from decoder: Decoder) throws {
@@ -152,10 +182,25 @@ public struct NewsConsensus: Codable, Sendable, Equatable {
         independentSourceCount = try c.decodeIfPresent(Int.self, forKey: .independentSourceCount) ?? 0
         facts = try c.decodeIfPresent([NewsConsensusFact].self, forKey: .facts) ?? []
         contested = try c.decodeIfPresent([NewsContestedPoint].self, forKey: .contested) ?? []
+        outletCount = try c.decodeIfPresent(Int.self, forKey: .outletCount)
     }
 
     /// Confirmed facts, in server order.
     public var confirmedFacts: [NewsConsensusFact] { facts.filter { $0.status == .confirmed } }
     /// Single-source facts, in server order.
     public var singleSourceFacts: [NewsConsensusFact] { facts.filter { $0.status == .singleSource } }
+    /// Contested points with at least two versions to compare — a point with
+    /// fewer versions has nothing to contrast and should not be displayed.
+    public var contestedPoints: [NewsContestedPoint] { contested.filter { $0.versions.count >= 2 } }
+    /// Whether the digest has anything worth displaying (confirmed facts,
+    /// single-source facts or displayable contested points).
+    public var hasDisplayableContent: Bool {
+        !confirmedFacts.isEmpty || !singleSourceFacts.isEmpty || !contestedPoints.isEmpty
+    }
+
+    /// French count label: « 0 source », « 1 source », « 3 sources »
+    /// (French keeps the singular for 0 and 1).
+    public static func sourcesLabelFR(_ count: Int) -> String {
+        "\(count) source\(count > 1 ? "s" : "")"
+    }
 }
