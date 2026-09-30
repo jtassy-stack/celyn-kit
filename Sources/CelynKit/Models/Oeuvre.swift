@@ -139,6 +139,11 @@ public struct Oeuvre: Identifiable, Codable, Sendable, Equatable, Hashable {
     /// compilation, not meant to be displayed. Omitted by the server when empty.
     /// nil = none / older server.
     public var editorialRanks: [EditorialRank]? = nil
+    /// Wikidata QID (culture-api migration 0160) when known. nil = unknown / older server.
+    public var wikidataId: String? = nil
+    /// Licence provenance of the row's fields ("tmdb", "wikidata", "igdb"…).
+    /// nil = older server.
+    public var dataSources: [String]? = nil
 }
 
 /// A placement on an editorial ranking list, bucketed by tier.

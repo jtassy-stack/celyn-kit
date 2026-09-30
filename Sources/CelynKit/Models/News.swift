@@ -147,6 +147,10 @@ public struct NewsEvent: Identifiable, Codable, Sendable, Equatable {
     /// Claim-level fact-check verdicts for this event. Empty until the
     /// server's fact-check job has run.
     public let factChecks: [NewsFactCheck]
+    /// « Écouter »: the radio podcast episode the event was extracted from
+    /// (France Inter / France Culture journals…). nil for text sources, older
+    /// servers, or a malformed payload — never fails the event decode.
+    public let audio: NewsAudio?
 
     public init(
         id: String,
@@ -159,7 +163,8 @@ public struct NewsEvent: Identifiable, Codable, Sendable, Equatable {
         programme: String? = nil,
         isLiveBlog: Bool = false,
         createdAt: Date,
-        factChecks: [NewsFactCheck] = []
+        factChecks: [NewsFactCheck] = [],
+        audio: NewsAudio? = nil
     ) {
         self.id = id
         self.kind = kind
@@ -172,11 +177,12 @@ public struct NewsEvent: Identifiable, Codable, Sendable, Equatable {
         self.isLiveBlog = isLiveBlog
         self.createdAt = createdAt
         self.factChecks = factChecks
+        self.audio = audio
     }
 
     private enum CodingKeys: String, CodingKey {
         case id, kind, summary, sourceType, sourceUrl, sourcePublishedAt
-        case authorDisplayName, programme, isLiveBlog, createdAt, factChecks
+        case authorDisplayName, programme, isLiveBlog, createdAt, factChecks, audio
     }
 
     /// The server sends `"factChecks": null` until its fact-check job has run
@@ -195,6 +201,62 @@ public struct NewsEvent: Identifiable, Codable, Sendable, Equatable {
         isLiveBlog = try c.decodeIfPresent(Bool.self, forKey: .isLiveBlog) ?? false
         createdAt = try c.decode(Date.self, forKey: .createdAt)
         factChecks = try c.decodeIfPresent([NewsFactCheck].self, forKey: .factChecks) ?? []
+        audio = (try? c.decodeIfPresent(NewsAudio.self, forKey: .audio)) ?? nil
+    }
+}
+
+/// `NewsEvent.audio` — field names match `PodcastEpisode` (audioUrl, title,
+/// publishedAt). Never carries the transcript.
+public struct NewsAudio: Codable, Sendable, Equatable, Hashable {
+    public let episodeId: String
+    public let audioUrl: String
+    public let title: String?
+    public let showName: String?
+    public let station: String?
+    public let publishedAt: String?
+    public let durationSeconds: Double?
+    /// Seconds into the audio where this event's story starts, located from
+    /// the Whisper segment timestamps (approximate, segment granularity — seek
+    /// a few seconds earlier). nil = unknown: play from the start.
+    public let offsetSeconds: Double?
+
+    public init(
+        episodeId: String,
+        audioUrl: String,
+        title: String? = nil,
+        showName: String? = nil,
+        station: String? = nil,
+        publishedAt: String? = nil,
+        durationSeconds: Double? = nil,
+        offsetSeconds: Double? = nil
+    ) {
+        self.episodeId = episodeId
+        self.audioUrl = audioUrl
+        self.title = title
+        self.showName = showName
+        self.station = station
+        self.publishedAt = publishedAt
+        self.durationSeconds = durationSeconds
+        self.offsetSeconds = offsetSeconds
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case episodeId, audioUrl, title, showName, station, publishedAt, durationSeconds, offsetSeconds
+    }
+
+    /// Only `episodeId` + `audioUrl` are required; every other field degrades
+    /// to nil when absent, null or mistyped (additive server fields).
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        episodeId = try c.decode(String.self, forKey: .episodeId)
+        audioUrl = try c.decode(String.self, forKey: .audioUrl)
+        title = (try? c.decodeIfPresent(String.self, forKey: .title)) ?? nil
+        showName = (try? c.decodeIfPresent(String.self, forKey: .showName)) ?? nil
+        station = (try? c.decodeIfPresent(String.self, forKey: .station)) ?? nil
+        publishedAt = (try? c.decodeIfPresent(String.self, forKey: .publishedAt)) ?? nil
+        durationSeconds = (try? c.decodeIfPresent(Double.self, forKey: .durationSeconds)) ?? nil
+        let offset = (try? c.decodeIfPresent(Double.self, forKey: .offsetSeconds)) ?? nil
+        offsetSeconds = offset.flatMap { $0.isFinite && $0 >= 0 ? $0 : nil }
     }
 }
 
@@ -216,6 +278,16 @@ public struct NewsStoryDetail: Identifiable, Codable, Sendable, Equatable {
     /// story (field absent) or when it fails to decode — a malformed digest
     /// never blanks the story detail.
     public let consensus: NewsConsensus?
+    /// Key concepts (people, places, organisations…). [] when absent.
+    public let concepts: [NewsConcept]
+    /// Generated context paragraph. Withheld server-side while its flag is off → nil.
+    public let context: NewsStoryContext?
+    /// Earlier stories on the same subject (« Déjà dans l'actu »). [] when absent.
+    public let relatedStories: [NewsRelatedStory]
+    /// « Pour aller plus loin ». [] when absent. Use `visibleFurtherReading`.
+    public let furtherReading: [FurtherReadingItem]
+    /// nil = absent (treat as `.standard`).
+    public let furtherReadingPolicy: FurtherReadingPolicy?
 
     public init(
         id: String,
@@ -230,7 +302,12 @@ public struct NewsStoryDetail: Identifiable, Codable, Sendable, Equatable {
         status: String,
         sources: [NewsStorySource] = [],
         events: [NewsEvent] = [],
-        consensus: NewsConsensus? = nil
+        consensus: NewsConsensus? = nil,
+        concepts: [NewsConcept] = [],
+        context: NewsStoryContext? = nil,
+        relatedStories: [NewsRelatedStory] = [],
+        furtherReading: [FurtherReadingItem] = [],
+        furtherReadingPolicy: FurtherReadingPolicy? = nil
     ) {
         self.id = id
         self.title = title
@@ -245,11 +322,17 @@ public struct NewsStoryDetail: Identifiable, Codable, Sendable, Equatable {
         self.sources = sources
         self.events = events
         self.consensus = consensus
+        self.concepts = concepts
+        self.context = context
+        self.relatedStories = relatedStories
+        self.furtherReading = furtherReading
+        self.furtherReadingPolicy = furtherReadingPolicy
     }
 
     private enum CodingKeys: String, CodingKey {
         case id, title, primaryKind, entityTokens, confidenceScore, eventCount
         case sourceCount, firstSeenAt, lastUpdateAt, status, sources, events, consensus
+        case concepts, context, relatedStories, furtherReading, furtherReadingPolicy
     }
 
     public init(from decoder: Decoder) throws {
@@ -267,6 +350,11 @@ public struct NewsStoryDetail: Identifiable, Codable, Sendable, Equatable {
         sources = try c.decodeIfPresent([NewsStorySource].self, forKey: .sources) ?? []
         events = try c.decodeIfPresent([NewsEvent].self, forKey: .events) ?? []
         consensus = (try? c.decodeIfPresent(NewsConsensus.self, forKey: .consensus)) ?? nil
+        concepts = c.decodeLossyArray(NewsConcept.self, forKey: .concepts)
+        context = c.decodeLenient(NewsStoryContext.self, forKey: .context)
+        relatedStories = c.decodeLossyArray(NewsRelatedStory.self, forKey: .relatedStories)
+        furtherReading = c.decodeLossyArray(FurtherReadingItem.self, forKey: .furtherReading)
+        furtherReadingPolicy = c.decodeLenient(FurtherReadingPolicy.self, forKey: .furtherReadingPolicy)
     }
 }
 
