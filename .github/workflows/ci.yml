@@ -24,3 +24,15 @@ jobs:
         run: swift build
       - name: Test
         run: swift test
+
+  shared-ci:
+    # The freshness check and requirement editor used by the apps' workflows.
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Freshness check tests
+        run: node --test .github/actions/celynkit-freshness/check.test.mjs
