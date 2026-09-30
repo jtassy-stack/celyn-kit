@@ -278,6 +278,16 @@ public struct NewsStoryDetail: Identifiable, Codable, Sendable, Equatable {
     /// story (field absent) or when it fails to decode — a malformed digest
     /// never blanks the story detail.
     public let consensus: NewsConsensus?
+    /// Key concepts (people, places, organisations…). [] when absent.
+    public let concepts: [NewsConcept]
+    /// Generated context paragraph. Withheld server-side while its flag is off → nil.
+    public let context: NewsStoryContext?
+    /// Earlier stories on the same subject (« Déjà dans l'actu »). [] when absent.
+    public let relatedStories: [NewsRelatedStory]
+    /// « Pour aller plus loin ». [] when absent. Use `visibleFurtherReading`.
+    public let furtherReading: [FurtherReadingItem]
+    /// nil = absent (treat as `.standard`).
+    public let furtherReadingPolicy: FurtherReadingPolicy?
 
     public init(
         id: String,
@@ -292,7 +302,12 @@ public struct NewsStoryDetail: Identifiable, Codable, Sendable, Equatable {
         status: String,
         sources: [NewsStorySource] = [],
         events: [NewsEvent] = [],
-        consensus: NewsConsensus? = nil
+        consensus: NewsConsensus? = nil,
+        concepts: [NewsConcept] = [],
+        context: NewsStoryContext? = nil,
+        relatedStories: [NewsRelatedStory] = [],
+        furtherReading: [FurtherReadingItem] = [],
+        furtherReadingPolicy: FurtherReadingPolicy? = nil
     ) {
         self.id = id
         self.title = title
@@ -307,11 +322,17 @@ public struct NewsStoryDetail: Identifiable, Codable, Sendable, Equatable {
         self.sources = sources
         self.events = events
         self.consensus = consensus
+        self.concepts = concepts
+        self.context = context
+        self.relatedStories = relatedStories
+        self.furtherReading = furtherReading
+        self.furtherReadingPolicy = furtherReadingPolicy
     }
 
     private enum CodingKeys: String, CodingKey {
         case id, title, primaryKind, entityTokens, confidenceScore, eventCount
         case sourceCount, firstSeenAt, lastUpdateAt, status, sources, events, consensus
+        case concepts, context, relatedStories, furtherReading, furtherReadingPolicy
     }
 
     public init(from decoder: Decoder) throws {
@@ -329,6 +350,11 @@ public struct NewsStoryDetail: Identifiable, Codable, Sendable, Equatable {
         sources = try c.decodeIfPresent([NewsStorySource].self, forKey: .sources) ?? []
         events = try c.decodeIfPresent([NewsEvent].self, forKey: .events) ?? []
         consensus = (try? c.decodeIfPresent(NewsConsensus.self, forKey: .consensus)) ?? nil
+        concepts = c.decodeLossyArray(NewsConcept.self, forKey: .concepts)
+        context = c.decodeLenient(NewsStoryContext.self, forKey: .context)
+        relatedStories = c.decodeLossyArray(NewsRelatedStory.self, forKey: .relatedStories)
+        furtherReading = c.decodeLossyArray(FurtherReadingItem.self, forKey: .furtherReading)
+        furtherReadingPolicy = c.decodeLenient(FurtherReadingPolicy.self, forKey: .furtherReadingPolicy)
     }
 }
 
