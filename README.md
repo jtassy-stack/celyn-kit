@@ -64,6 +64,19 @@ swift test
 
 - **CI**: every PR builds and tests the package (`.github/workflows/ci.yml`).
 - **Releases are automatic.** A merge that changes `Sources/` or `Package.swift` is tested, then tagged and published by `.github/workflows/release.yml`. The bump comes from conventional commit subjects since the last tag (`scripts/next-version.sh`): `feat:` → minor, `fix:`/other → patch, `type!:` or a `BREAKING CHANGE` body → major. Docs/CI/test-only merges do not release; add `[skip release]` to the merge commit to skip one on purpose.
-- **Apps follow the kit**: Keskonfé's `celynkit-bump` workflow opens a PR when a newer tag exists, and its App Store submit refuses to ship a stale kit.
-- **Kit changes are checked against an app before they land**: `.github/workflows/consumers.yml` builds Keskonfé against the PR branch (needs the `CONSUMER_REPO_TOKEN` secret; without it the job is skipped).
+- **Kit changes are checked against every app before they land**: `.github/workflows/consumers.yml` builds each consumer (matrix: Keskonfé, Sirius, Pause) against the PR branch (needs the `CONSUMER_REPO_TOKEN` secret with read access to all of them; without it the rows are skipped). Pause is `allow-failure` while it lags far behind. **New consumer app → add a matrix row.**
+
+## Shared CI for apps (freshness guard + daily bump)
+
+The logic lives here once; apps only keep thin callers pinned to a celyn-kit ref (never copies).
+
+- **Freshness guard** — composite action `.github/actions/celynkit-freshness` (script `check.mjs` next to it). Compares the celyn-kit version pinned in the app's `Package.resolved` with the latest release tag. `mode: warn` for TestFlight / dry runs, `mode: enforce` for App Store submission; `allow-stale: ${{ vars.CELYNKIT_ALLOW_STALE }}` = `1` waives on purpose.
+  ```yaml
+  - uses: jtassy-stack/celyn-kit/.github/actions/celynkit-freshness@<sha>
+    with: { mode: enforce, allow-stale: "${{ vars.CELYNKIT_ALLOW_STALE }}" }
+  ```
+  Local tooling (fastlane) fetches the same script by the same pinned ref from `raw.githubusercontent.com/jtassy-stack/celyn-kit/<sha>/.github/actions/celynkit-freshness/check.mjs`.
+- **Daily bump PR** — reusable workflow `.github/workflows/celynkit-bump.yml` (`on: workflow_call`, header documents the inputs and a full caller). Bumps `project.yml` (XcodeGen) or the pbxproj requirement, regenerates, resolves, `build-for-testing`, opens `chore(deps): CelynKit <v>` on branch `chore/celynkit-<v>` (skipped if that branch already has an open PR). If the build fails, the PR is opened as a draft and the run fails. The caller job needs `permissions: { contents: write, pull-requests: write }` and the app repo needs "Allow GitHub Actions to create and approve pull requests".
+- **Pinning and update path** — callers pin `@<full sha>` (or a semver tag of the kit: any tag cut after these files landed contains them). To change the shared logic: PR here, merge, then repoint the callers (`sed -i '' 's/<old sha>/<new sha>/' .github/workflows/*.yml` + the Fastfile URL where present) in one small PR per app. Apps carry a Dependabot `github-actions` config that proposes these repoints automatically when callers are pinned to a tag.
+
 - **Where fixes go**: model, decoding and API-call fixes are made here first, then the apps bump the version. Do not patch DTOs app-side.
