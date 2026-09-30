@@ -1,0 +1,7 @@
+# job.workflow_sha (commit of the reusable workflow file being run) is a
+# documented context property, newer than actionlint's schema:
+# https://docs.github.com/en/actions/reference/workflows-and-actions/contexts#job-context
+paths:
+  .github/workflows/celynkit-bump.yml:
+    ignore:
+      - 'property "workflow_sha" is not defined'

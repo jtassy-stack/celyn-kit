@@ -1,0 +1,111 @@
+name: Consumers
+
+# Does a change to the kit still compile in every app that consumes it? Builds
+# each consumer (app + tests, no test run) against THIS branch of the kit, by
+# swapping its SwiftPM dependency for a local path. The matrix below is the
+# registry of CelynKit consumers: add a row when an app starts using the kit.
+#
+# Needs a repository secret, otherwise every row reports "skipped" and passes:
+#   CONSUMER_REPO_TOKEN  a token with read access to every repo of the matrix
+#
+# `allow-failure: true` marks a consumer known to lag (e.g. Pause, far behind
+# the current kit): its row still runs and shows red, but does not fail the check.
+on:
+  pull_request:
+    paths:
+      - "Sources/**"
+      - "Package.swift"
+  workflow_dispatch:
+
+concurrency:
+  group: consumers-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: ${{ matrix.repo }}
+    runs-on: macos-15
+    timeout-minutes: 45
+    continue-on-error: ${{ matrix.allow-failure }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - repo: jtassy-stack/keskonfe
+            xcodeproj: Keskonfe.xcodeproj
+            scheme: Keskonfe
+            xcconfig: Keskonfe/Resources/Secrets.xcconfig
+            xcconfig-keys: CULTURE_API_KEY
+            allow-failure: false
+          - repo: jtassy-stack/sirius-ios
+            xcodeproj: Sirius.xcodeproj
+            scheme: Sirius
+            xcconfig: Sirius/Resources/Secrets.xcconfig
+            xcconfig-keys: CULTURE_API_KEY
+            allow-failure: false
+          - repo: jtassy-stack/Pause
+            xcodeproj: Pause.xcodeproj
+            scheme: Pause
+            xcconfig: Pause/Resources/Secrets.xcconfig
+            xcconfig-keys: SUPABASE_URL,SUPABASE_ANON_KEY,TMDB_API_KEY,CULTURE_API_KEY
+            allow-failure: true
+    env:
+      HAS_TOKEN: ${{ secrets.CONSUMER_REPO_TOKEN != '' }}
+    steps:
+      - name: Skip notice
+        if: env.HAS_TOKEN != 'true'
+        run: echo "::notice::CONSUMER_REPO_TOKEN is not set - consumer build skipped."
+
+      - uses: actions/checkout@v4
+        if: env.HAS_TOKEN == 'true'
+        with:
+          path: kit
+
+      - uses: actions/checkout@v4
+        if: env.HAS_TOKEN == 'true'
+        with:
+          repository: ${{ matrix.repo }}
+          token: ${{ secrets.CONSUMER_REPO_TOKEN }}
+          path: app
+
+      - name: Select latest Xcode
+        if: env.HAS_TOKEN == 'true'
+        run: |
+          XCODE_PATH=$(find /Applications -maxdepth 1 -name "Xcode*.app" | sort -V | tail -1)
+          sudo xcode-select -s "$XCODE_PATH"
+          xcodebuild -version
+
+      - name: Point the app at this branch of the kit
+        if: env.HAS_TOKEN == 'true'
+        working-directory: app
+        env:
+          XCCONFIG: ${{ matrix.xcconfig }}
+          XCCONFIG_KEYS: ${{ matrix.xcconfig-keys }}
+        run: |
+          set -euo pipefail
+          brew install xcodegen
+          python3 - <<'PY'
+          import re
+          p='project.yml'; s=open(p).read()
+          new,n=re.subn(r'(CelynKit:\n)\s+url: [^\n]+\n\s+from: [^\n]+', r'\1    path: ../kit', s, count=1)
+          assert n==1, 'CelynKit package block not found in project.yml'
+          open(p,'w').write(new)
+          PY
+          mkdir -p "$(dirname "$XCCONFIG")"; : > "$XCCONFIG"
+          IFS=',' read -ra KEYS <<< "$XCCONFIG_KEYS"
+          for k in "${KEYS[@]}"; do printf '%s = ci-compile-only\n' "$k" >> "$XCCONFIG"; done
+          rm -rf ~/Library/Caches/org.swift.swiftpm/artifacts
+          xcodegen generate
+
+      - name: Build the app against the branch
+        if: env.HAS_TOKEN == 'true'
+        working-directory: app
+        env:
+          XCODEPROJ: ${{ matrix.xcodeproj }}
+          SCHEME: ${{ matrix.scheme }}
+        run: |
+          xcodebuild build-for-testing -project "$XCODEPROJ" -scheme "$SCHEME" \
+            -destination 'generic/platform=iOS Simulator' -quiet

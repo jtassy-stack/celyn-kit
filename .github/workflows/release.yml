@@ -1,0 +1,57 @@
+name: Release
+
+# Every merge that changes the package (Sources/, Package.swift) is tested and
+# released automatically as a semver tag, so apps can always pick up the latest
+# kit and no tag is cut by hand. The bump comes from conventional commits since
+# the last tag (scripts/next-version.sh):
+#   feat -> minor, fix/other -> patch, "type!:" or BREAKING CHANGE -> major.
+# Docs / CI / tests-only merges do not release. To skip a release explicitly,
+# put [skip release] in the merge commit message.
+on:
+  push:
+    branches: [main]
+    paths:
+      - "Sources/**"
+      - "Package.swift"
+      - ".github/workflows/release.yml"
+      - "scripts/next-version.sh"
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  test:
+    runs-on: macos-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - run: swift build
+      - run: swift test
+
+  release:
+    needs: test
+    if: ${{ !contains(github.event.head_commit.message, '[skip release]') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Next version
+        id: v
+        run: |
+          set -euo pipefail
+          V="$(scripts/next-version.sh)"
+          echo "next version: '${V}'"
+          echo "version=${V}" >> "$GITHUB_OUTPUT"
+      - name: Tag and publish
+        if: steps.v.outputs.version != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          V: ${{ steps.v.outputs.version }}
+        run: |
+          gh release create "$V" --target "$GITHUB_SHA" --title "$V" --generate-notes
