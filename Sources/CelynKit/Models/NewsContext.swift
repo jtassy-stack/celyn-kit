@@ -384,12 +384,12 @@ public struct FurtherReadingItem: Codable, Sendable, Equatable, Hashable, Identi
         [type.label, year.map(String.init)].compactMap { $0 }.joined(separator: " · ")
     }
 
-    /// VoiceOver label: « Livre, titre, 2023. Pourquoi : … ».
+    /// VoiceOver label: « Livre, titre, 2023. Pourquoi : …. Disponible sur … » — sentence parts
+    /// joined by `AccessibilityText.sentences`, so a reason already ending with a period (or « ! »,
+    /// « ? », « … ») never produces « .. ».
     public var accessibilityLabel: String {
-        var s = [type.label, title, year.map(String.init)].compactMap { $0 }.joined(separator: ", ")
-        if !reason.isEmpty { s += ". Pourquoi : " + reason }
-        if let a = availabilityLabel(limit: 3) { s += ". " + a }
-        return s
+        let head = [type.label, title, year.map(String.init)].compactMap { $0 }.joined(separator: ", ")
+        return AccessibilityText.sentences([head, reason.isEmpty ? nil : "Pourquoi : " + reason, availabilityLabel(limit: 3)])
     }
 
     /// The item links to a catalogue fiche (`oeuvres.get(id:)`).
@@ -433,5 +433,24 @@ extension Oeuvre {
         guard let s = imageUrl, !s.isEmpty, let u = URL(string: s),
               let scheme = u.scheme?.lowercased(), scheme == "https" || scheme == "http" else { return nil }
         return u
+    }
+}
+
+// MARK: - VoiceOver text
+
+public enum AccessibilityText {
+    /// Joins sentence parts with « . » without doubling punctuation: each non-empty part is
+    /// trimmed, gets a final period unless it already ends with terminal punctuation
+    /// (. ! ? … : ;), and parts are separated by a single space.
+    /// `sentences(["Livre, X", "Pourquoi : Il éclaire.", nil])` → « Livre, X. Pourquoi : Il éclaire. »
+    public static func sentences(_ parts: [String?]) -> String {
+        parts.compactMap { part -> String? in
+            guard var p = part?.trimmingCharacters(in: .whitespacesAndNewlines), !p.isEmpty else { return nil }
+            // « .. » (a stray doubled period) collapses to one; « ... » is kept as an ellipsis.
+            while p.hasSuffix("..") && !p.hasSuffix("...") { p.removeLast() }
+            if let last = p.last, ".!?…:;".contains(last) { return p }
+            return p + "."
+        }
+        .joined(separator: " ")
     }
 }
