@@ -130,6 +130,21 @@ final class NewsContextDecodingTests: XCTestCase {
         XCTAssertEqual(i.accessibilityLabel, "Livre, Les Pays baltes, 2024. Pourquoi : Il éclaire le contexte.")
     }
 
+    func testAccessibilityLabelNeverDoublesPunctuation() {
+        let i = FurtherReadingItem(type: .livre, title: "Les Pays baltes", year: 2024, reason: "Il éclaire le contexte.", availabilityFr: ["Netflix"])
+        XCTAssertEqual(i.accessibilityLabel, "Livre, Les Pays baltes, 2024. Pourquoi : Il éclaire le contexte. Disponible sur Netflix.")
+        XCTAssertFalse(i.accessibilityLabel.contains(".."))
+        let noDot = FurtherReadingItem(type: .film, title: "X", year: nil, reason: "Sans point")
+        XCTAssertEqual(noDot.accessibilityLabel, "Film, X. Pourquoi : Sans point.")
+        let noReason = FurtherReadingItem(type: .film, title: "X", year: nil, reason: "")
+        XCTAssertEqual(noReason.accessibilityLabel, "Film, X.")
+    }
+
+    func testAccessibilityTextSentences() {
+        XCTAssertEqual(AccessibilityText.sentences(["A", "B.", nil, "  ", "C ?", "D…", "E.."]), "A. B. C ? D… E.")
+        XCTAssertEqual(AccessibilityText.sentences([]), "")
+    }
+
     func testOeuvreNewCatalogueFieldsDecodeAndAreOptional() throws {
         let game = try decoder().decode(Oeuvre.self, from: Data(#"{"id":"g","title":"G","oeuvreType":"game","wikidataId":"Q1","dataSources":["wikidata"],"imageUrl":null}"#.utf8))
         XCTAssertEqual(game.wikidataId, "Q1")
