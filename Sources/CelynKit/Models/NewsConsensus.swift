@@ -130,12 +130,29 @@ public struct NewsContestedVersion: Codable, Sendable, Equatable {
     public let value: Double?
     /// Earliest publication among the version's sources. Nil on older digests.
     public let firstPublishedAt: Date?
+    /// Evolution only: one day's reading or a total over several days. Nil on disputes and older digests.
+    public let series: NewsEvolutionSeries?
 
-    public init(claim: String, sources: [NewsConsensusSource] = [], value: Double? = nil, firstPublishedAt: Date? = nil) {
+    public init(claim: String, sources: [NewsConsensusSource] = [], value: Double? = nil, firstPublishedAt: Date? = nil, series: NewsEvolutionSeries? = nil) {
         self.claim = claim
         self.sources = sources
         self.value = value
         self.firstPublishedAt = firstPublishedAt
+        self.series = series
+    }
+}
+
+/// Whether an evolution figure is one day's reading or a running total.
+public enum NewsEvolutionSeries: String, Codable, Sendable, CaseIterable {
+    /// « 1 700 interpellations jeudi »
+    case daily
+    /// « 5 000 interpellations depuis lundi », « au total »
+    case cumulative
+
+    /// Decodes unknown future values to `.daily` (drawn as its own reading, never summed).
+    public init(from decoder: Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        self = NewsEvolutionSeries(rawValue: raw) ?? .daily
     }
 }
 
@@ -164,6 +181,12 @@ public struct NewsContestedPoint: Codable, Sendable, Equatable {
         self.subject = subject
         self.kind = kind
         self.versions = versions
+    }
+
+    /// The evolution's versions of one series, in time order. Versions without a
+    /// series (older digests) count as daily.
+    public func versions(in series: NewsEvolutionSeries) -> [NewsContestedVersion] {
+        versions.filter { ($0.series ?? .daily) == series }
     }
 
     /// True only when the server says so and every version can be placed on a time axis.
