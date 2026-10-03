@@ -126,21 +126,49 @@ public struct NewsConsensusFact: Identifiable, Codable, Sendable, Equatable {
 public struct NewsContestedVersion: Codable, Sendable, Equatable {
     public let claim: String
     public let sources: [NewsConsensusSource]
+    /// The version's figure, for number points. Nil on older digests and date points.
+    public let value: Double?
+    /// Earliest publication among the version's sources. Nil on older digests.
+    public let firstPublishedAt: Date?
 
-    public init(claim: String, sources: [NewsConsensusSource] = []) {
+    public init(claim: String, sources: [NewsConsensusSource] = [], value: Double? = nil, firstPublishedAt: Date? = nil) {
         self.claim = claim
         self.sources = sources
+        self.value = value
+        self.firstPublishedAt = firstPublishedAt
+    }
+}
+
+/// How to read a contested point.
+public enum NewsContestedKind: String, Codable, Sendable, CaseIterable {
+    /// Sources give rival versions of one fact.
+    case dispute
+    /// A running count (arrests, blockades…) read at different times; versions are in time order.
+    case evolution
+
+    /// Decodes unknown future values to `.dispute` (the cautious reading).
+    public init(from decoder: Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        self = NewsContestedKind(rawValue: raw) ?? .dispute
     }
 }
 
 /// A subject on which sources disagree, with each competing version.
 public struct NewsContestedPoint: Codable, Sendable, Equatable {
     public let subject: String
+    /// Absent on older digests — read as `.dispute`.
+    public let kind: NewsContestedKind?
     public let versions: [NewsContestedVersion]
 
-    public init(subject: String, versions: [NewsContestedVersion]) {
+    public init(subject: String, kind: NewsContestedKind? = nil, versions: [NewsContestedVersion]) {
         self.subject = subject
+        self.kind = kind
         self.versions = versions
+    }
+
+    /// True only when the server says so and every version can be placed on a time axis.
+    public var isEvolution: Bool {
+        kind == .evolution && versions.allSatisfy { $0.value != nil && $0.firstPublishedAt != nil }
     }
 }
 

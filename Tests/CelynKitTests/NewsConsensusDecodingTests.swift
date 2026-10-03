@@ -96,4 +96,26 @@ final class NewsConsensusDecodingTests: XCTestCase {
         XCTAssertNil(r.data.consensus)
         XCTAssertEqual(r.data.id, "4b82244a")
     }
+
+    func testContestedEvolutionKindValuesAndDates() throws {
+        let json = """
+        {"generatedAt": "2026-10-03T08:00:00.000Z", "eventCount": 39, "independentSourceCount": 12,
+         "facts": [], "contested": [
+          {"subject": "Affluence : interpellations", "kind": "evolution", "versions": [
+            {"claim": "164 interpellations.", "sources": [], "value": 164, "firstPublishedAt": "2026-09-28T19:00:00.000Z"},
+            {"claim": "1 949 interpellations.", "sources": [], "value": 1949, "firstPublishedAt": "2026-10-01T18:00:00.000Z"}]},
+          {"subject": "Bilan", "kind": "someday", "versions": [{"claim": "a", "sources": []}, {"claim": "b", "sources": []}]},
+          {"subject": "Ancien", "versions": [{"claim": "a", "sources": []}, {"claim": "b", "sources": []}]}
+        ]}
+        """
+        let r = try decoder().decode(NewsStoryDetailResponse.self, from: storyJSON(consensus: json))
+        let points = try XCTUnwrap(r.data.consensus).contested
+        XCTAssertEqual(points[0].kind, .evolution)
+        XCTAssertTrue(points[0].isEvolution)
+        XCTAssertEqual(points[0].versions.map(\.value), [164, 1949])
+        XCTAssertNotNil(points[0].versions[0].firstPublishedAt)
+        XCTAssertEqual(points[1].kind, .dispute)      // unknown kind → dispute
+        XCTAssertNil(points[2].kind)                   // older digest
+        XCTAssertFalse(points[2].isEvolution)
+    }
 }
