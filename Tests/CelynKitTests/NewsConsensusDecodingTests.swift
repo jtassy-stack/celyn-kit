@@ -118,4 +118,19 @@ final class NewsConsensusDecodingTests: XCTestCase {
         XCTAssertNil(points[2].kind)                   // older digest
         XCTAssertFalse(points[2].isEvolution)
     }
+
+    func testEvolutionSeries() throws {
+        let json = """
+        {"generatedAt": "2026-10-03T08:00:00.000Z", "eventCount": 2, "independentSourceCount": 2, "facts": [], "contested": [
+          {"subject": "s", "kind": "evolution", "versions": [
+            {"claim": "1 700 jeudi.", "sources": [], "value": 1700, "firstPublishedAt": "2026-10-02T08:00:00Z", "series": "daily"},
+            {"claim": "5 000 depuis lundi.", "sources": [], "value": 5000, "firstPublishedAt": "2026-10-02T09:00:00Z", "series": "cumulative"},
+            {"claim": "x", "sources": [], "value": 3, "firstPublishedAt": "2026-10-02T10:00:00Z", "series": "weekly"},
+            {"claim": "y", "sources": [], "value": 4, "firstPublishedAt": "2026-10-02T11:00:00Z"}]}]}
+        """
+        let r = try decoder().decode(NewsStoryDetailResponse.self, from: storyJSON(consensus: json))
+        let p = try XCTUnwrap(r.data.consensus?.contested.first)
+        XCTAssertEqual(p.versions(in: .cumulative).map(\.value), [5000])
+        XCTAssertEqual(p.versions(in: .daily).map(\.value), [1700, 3, 4])   // unknown + absent → daily
+    }
 }
