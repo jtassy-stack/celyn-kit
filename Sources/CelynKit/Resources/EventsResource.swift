@@ -12,6 +12,10 @@ public struct EventsResource: Sendable {
         public var happeningNow: Bool?
         public var category: String?
         public var limit: Int?
+        /// Only the events linked to this oeuvre (`oeuvre_id`). Works with or
+        /// without `lat`/`lng`: without a location, every upcoming date of the
+        /// work (running exhibitions included), ordered by start time.
+        public var oeuvreId: String?
 
         public init(
             lat: Double? = nil,
@@ -21,7 +25,8 @@ public struct EventsResource: Sendable {
             to: Date? = nil,
             happeningNow: Bool? = nil,
             category: String? = nil,
-            limit: Int? = nil
+            limit: Int? = nil,
+            oeuvreId: String? = nil
         ) {
             self.lat = lat
             self.lng = lng
@@ -31,20 +36,27 @@ public struct EventsResource: Sendable {
             self.happeningNow = happeningNow
             self.category = category
             self.limit = limit
+            self.oeuvreId = oeuvreId
+        }
+
+        /// Query string sent to `GET /events` (snake_case, as the API expects).
+        var queryItems: [String: String] {
+            var query: [String: String] = [:]
+            if let lat { query["lat"] = String(lat) }
+            if let lng { query["lng"] = String(lng) }
+            if let radiusKm { query["radius_km"] = String(radiusKm) }
+            if let from { query["from"] = ISO8601DateFormatter().string(from: from) }
+            if let to { query["to"] = ISO8601DateFormatter().string(from: to) }
+            if happeningNow == true { query["happening_now"] = "true" }
+            if let category { query["category"] = category }
+            if let limit { query["limit"] = String(limit) }
+            if let oeuvreId, !oeuvreId.isEmpty { query["oeuvre_id"] = oeuvreId }
+            return query
         }
     }
 
     public func list(_ params: ListParams = .init()) async throws -> EventListResponse {
-        var query: [String: String] = [:]
-        if let lat = params.lat { query["lat"] = String(lat) }
-        if let lng = params.lng { query["lng"] = String(lng) }
-        if let r = params.radiusKm { query["radius_km"] = String(r) }
-        if let f = params.from { query["from"] = ISO8601DateFormatter().string(from: f) }
-        if let t = params.to { query["to"] = ISO8601DateFormatter().string(from: t) }
-        if params.happeningNow == true { query["happening_now"] = "true" }
-        if let c = params.category { query["category"] = c }
-        if let l = params.limit { query["limit"] = String(l) }
-        return try await client.get("events", query: query)
+        try await client.get("events", query: params.queryItems)
     }
 
     public func get(id: String) async throws -> Event {
