@@ -260,6 +260,28 @@ public struct NewsAudio: Codable, Sendable, Equatable, Hashable {
     }
 }
 
+/// One episode of a subject: a story in the chain of linked stories (`thread` of the detail).
+public struct NewsThreadEpisode: Identifiable, Codable, Sendable, Equatable {
+    public let id: String
+    public let title: String
+    public let firstSeenAt: Date
+    public let lastUpdateAt: Date
+    public let eventCount: Int
+    public let status: String
+    /// The story the detail was requested for.
+    public let current: Bool
+
+    public init(id: String, title: String, firstSeenAt: Date, lastUpdateAt: Date, eventCount: Int, status: String, current: Bool) {
+        self.id = id
+        self.title = title
+        self.firstSeenAt = firstSeenAt
+        self.lastUpdateAt = lastUpdateAt
+        self.eventCount = eventCount
+        self.status = status
+        self.current = current
+    }
+}
+
 public struct NewsStoryDetail: Identifiable, Codable, Sendable, Equatable {
     public let id: String
     public let title: String
@@ -284,6 +306,8 @@ public struct NewsStoryDetail: Identifiable, Codable, Sendable, Equatable {
     public let context: NewsStoryContext?
     /// Earlier stories on the same subject (« Déjà dans l'actu »). [] when absent.
     public let relatedStories: [NewsRelatedStory]
+    /// Episodes of the subject (linked stories), oldest first. [] when the story is alone.
+    public let thread: [NewsThreadEpisode]
     /// « Pour aller plus loin ». [] when absent. Use `visibleFurtherReading`.
     public let furtherReading: [FurtherReadingItem]
     /// nil = absent (treat as `.standard`).
@@ -306,6 +330,7 @@ public struct NewsStoryDetail: Identifiable, Codable, Sendable, Equatable {
         concepts: [NewsConcept] = [],
         context: NewsStoryContext? = nil,
         relatedStories: [NewsRelatedStory] = [],
+        thread: [NewsThreadEpisode] = [],
         furtherReading: [FurtherReadingItem] = [],
         furtherReadingPolicy: FurtherReadingPolicy? = nil
     ) {
@@ -325,6 +350,7 @@ public struct NewsStoryDetail: Identifiable, Codable, Sendable, Equatable {
         self.concepts = concepts
         self.context = context
         self.relatedStories = relatedStories
+        self.thread = thread
         self.furtherReading = furtherReading
         self.furtherReadingPolicy = furtherReadingPolicy
     }
@@ -332,7 +358,7 @@ public struct NewsStoryDetail: Identifiable, Codable, Sendable, Equatable {
     private enum CodingKeys: String, CodingKey {
         case id, title, primaryKind, entityTokens, confidenceScore, eventCount
         case sourceCount, firstSeenAt, lastUpdateAt, status, sources, events, consensus
-        case concepts, context, relatedStories, furtherReading, furtherReadingPolicy
+        case concepts, context, relatedStories, thread, furtherReading, furtherReadingPolicy
     }
 
     public init(from decoder: Decoder) throws {
@@ -353,6 +379,7 @@ public struct NewsStoryDetail: Identifiable, Codable, Sendable, Equatable {
         concepts = c.decodeLossyArray(NewsConcept.self, forKey: .concepts)
         context = c.decodeLenient(NewsStoryContext.self, forKey: .context)
         relatedStories = c.decodeLossyArray(NewsRelatedStory.self, forKey: .relatedStories)
+        thread = c.decodeLossyArray(NewsThreadEpisode.self, forKey: .thread)
         furtherReading = c.decodeLossyArray(FurtherReadingItem.self, forKey: .furtherReading)
         furtherReadingPolicy = c.decodeLenient(FurtherReadingPolicy.self, forKey: .furtherReadingPolicy)
     }

@@ -156,4 +156,18 @@ final class NewsContextDecodingTests: XCTestCase {
         XCTAssertNil(film.wikidataId)
         XCTAssertNil(film.dataSources)
     }
+
+    func testThreadDecodesOldestFirstAndDropsMalformedEpisodes() throws {
+        let s = try story(#"""
+        ,"thread":[{"id":"a","title":"Garde à vue","firstSeenAt":"2026-09-20T06:10:00.000Z","lastUpdateAt":"2026-09-21T07:10:00Z","eventCount":4,"status":"cooling","current":false},
+                   {"id":"b"},
+                   {"id":"c","title":"Procès","firstSeenAt":"2026-10-01T06:10:00.000Z","lastUpdateAt":"2026-10-02T07:10:00Z","eventCount":2,"status":"active","current":true}]
+        """#)
+        XCTAssertEqual(s.thread.map(\.id), ["a", "c"])
+        XCTAssertEqual(s.thread.filter(\.current).map(\.id), ["c"])
+    }
+
+    func testThreadAbsentIsEmpty() throws {
+        XCTAssertTrue(try story().thread.isEmpty)
+    }
 }
