@@ -58,6 +58,31 @@ public struct MeResource: Sendable {
         try await client.get("me/circle")
     }
 
+    // MARK: Safety (block, report)
+
+    /// Blocks a user: the server deletes the follows in both directions, refuses new ones and hides the
+    /// pair from each other in contact matching. The blocked person is not told.
+    public func block(_ userId: String) async throws -> BlockResponse {
+        struct Body: Encodable { let userId: String }
+        return try await client.post("me/blocks", body: Body(userId: userId))
+    }
+
+    /// Lifts the caller's own block. It does not bring the follows back.
+    public func unblock(_ userId: String) async throws -> BlockResponse {
+        try await client.delete("me/blocks/\(userId)")
+    }
+
+    /// The people the caller blocked, newest data first as the server sends it.
+    public func getBlocked() async throws -> CircleListResponse<CircleMember> {
+        try await client.get("me/blocks")
+    }
+
+    /// Reports a user for review. Nothing is automatic; blocking is a separate call.
+    public func report(_ userId: String, reason: ReportReason) async throws -> ReportResponse {
+        struct Body: Encodable { let userId: String; let reason: ReportReason }
+        return try await client.post("me/reports", body: Body(userId: userId, reason: reason))
+    }
+
     /// How many people the caller MUTUALLY follows have saved each id.
     ///
     /// Mutual is not an implementation detail, it is the contract: follows in
@@ -116,6 +141,23 @@ public struct CircleMember: Codable, Sendable, Identifiable {
 public struct CircleSignalResponse: Codable, Sendable {
     /// rawId → number of mutually-followed people who saved it. Absent means 0.
     public let counts: [String: Int]
+}
+
+public struct BlockResponse: Codable, Sendable {
+    public let blocked: Bool
+}
+
+public struct ReportResponse: Codable, Sendable {
+    public let reported: Bool
+}
+
+/// Why a user is reported. Raw values are the server's `user_reports.reason` check constraint.
+public enum ReportReason: String, Codable, Sendable, CaseIterable {
+    case spam
+    case harassment
+    case impersonation
+    case inappropriateName = "inappropriate_name"
+    case other
 }
 
 public struct FollowResponse: Codable, Sendable {
