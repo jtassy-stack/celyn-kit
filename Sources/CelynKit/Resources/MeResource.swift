@@ -58,6 +58,20 @@ public struct MeResource: Sendable {
         try await client.get("me/circle")
     }
 
+    // MARK: Friend requests
+
+    /// « Demandes »: people who follow the caller and are not followed back (not ignored, not blocked).
+    /// Accepting is `follow(_:)` on that id; the pair then becomes mutual.
+    public func getRequests() async throws -> CircleListResponse<CircleMember> {
+        try await client.get("me/circle/requests")
+    }
+
+    /// « Ignorer »: hides a request. The follower is not told and keeps their one-way follow.
+    public func dismissRequest(_ userId: String) async throws -> DismissResponse {
+        struct Empty: Encodable {}
+        return try await client.post("me/circle/requests/\(userId)/dismiss", body: Empty())
+    }
+
     // MARK: Safety (block, report)
 
     /// Blocks a user: the server deletes the follows in both directions, refuses new ones and hides the
@@ -145,6 +159,10 @@ public struct CircleSignalResponse: Codable, Sendable {
 
 public struct BlockResponse: Codable, Sendable {
     public let blocked: Bool
+}
+
+public struct DismissResponse: Codable, Sendable {
+    public let dismissed: Bool
 }
 
 public struct ReportResponse: Codable, Sendable {
