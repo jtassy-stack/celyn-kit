@@ -43,7 +43,7 @@ public struct QuizResource: Sendable {
         if let deviceId { headers["x-device-id"] = deviceId.uuidString }
         do {
             let _: Ack = try await client.post(
-                "quiz/v2/quiz/\(id)/report",
+                "quiz/v2/quiz/\(Self.pathSegment(id))/report",
                 body: Body(reason: reason),
                 headers: headers
             )
@@ -60,6 +60,11 @@ public struct QuizResource: Sendable {
 
     /// The question attached to a news story (the Fil links a card to it). 404 when the story has none.
     public func story(id: String) async throws -> QuizQuestion {
-        try await client.get("quiz/v2/story/\(id)")
+        try await client.get("quiz/v2/story/\(Self.pathSegment(id))")
+    }
+
+    /// Un id dans le chemin ne doit jamais changer la route ("/" ou "?") : encodage percent, UUID et "celyn:<uuid>" inchangés.
+    static func pathSegment(_ id: String) -> String {
+        id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed.subtracting(CharacterSet(charactersIn: "/?"))) ?? id
     }
 }
