@@ -135,7 +135,8 @@ public final class CultureAPIClient: Sendable {
         baseURL: URL,
         configuration: CultureAPIClientConfiguration,
         versionHeaders: [String: String],
-        bearerProvider: (@Sendable () -> String?)?
+        bearerProvider: (@Sendable () -> String?)?,
+        protocolClasses: [AnyClass]? = nil
     ) {
         self.apiKey = apiKey
         self.baseURL = baseURL
@@ -156,7 +157,26 @@ public final class CultureAPIClient: Sendable {
         // Default 2 avoids saturating the server with parallel TLS handshakes,
         // which caused nw_endpoint_flow failures on cellular/weak wifi (b36c4c5).
         config.httpMaximumConnectionsPerHost = configuration.maxConnectionsPerHost
+        if let protocolClasses { config.protocolClasses = protocolClasses }
         self.session = URLSession(configuration: config)
+    }
+
+    /// Test seam: same client, but requests go through the given `URLProtocol`
+    /// classes instead of the network. Internal on purpose.
+    convenience init(
+        apiKey: String,
+        baseURL: URL = URL(string: "https://celyn.io/api")!,
+        configuration: CultureAPIClientConfiguration = .init(),
+        protocolClasses: [AnyClass]
+    ) {
+        self.init(
+            apiKey: apiKey,
+            baseURL: baseURL,
+            configuration: configuration,
+            versionHeaders: Self.versionHeaders(clientIdentifier: configuration.clientIdentifier),
+            bearerProvider: nil,
+            protocolClasses: protocolClasses
+        )
     }
 
     /// `x-client` + `x-app-version` for an identified client; nothing at all
@@ -310,6 +330,17 @@ public final class CultureAPIClient: Sendable {
         try await sendBody("POST", path, body: body)
     }
 
+    /// Same as `post(_:body:)` with extra request headers (e.g. `x-device-id`).
+    /// Additive overload; `x-api-key` and the version headers are still set by
+    /// the client and are not overridable here.
+    public func post<Req: Encodable, Res: Decodable>(
+        _ path: String,
+        body: Req,
+        headers: [String: String]
+    ) async throws -> Res {
+        try await sendBody("POST", path, body: body, extraHeaders: headers)
+    }
+
     /// Performs a PUT with a JSON body and decodes the response. Used for
     /// idempotent upserts (e.g. /me/sync).
     public func put<Req: Encodable, Res: Decodable>(
@@ -331,7 +362,8 @@ public final class CultureAPIClient: Sendable {
     private func sendBody<Req: Encodable, Res: Decodable>(
         _ method: String,
         _ path: String,
-        body: Req
+        body: Req,
+        extraHeaders: [String: String] = [:]
     ) async throws -> Res {
         guard !apiKey.isEmpty else {
             throw CultureAPIError.missingAPIKey
@@ -347,6 +379,7 @@ public final class CultureAPIClient: Sendable {
         var request = URLRequest(url: url)
         request.httpMethod = method
         request.httpBody = payload
+        for (field, value) in extraHeaders { request.setValue(value, forHTTPHeaderField: field) }
         applyCommonHeaders(to: &request)
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.timeoutInterval = timeout

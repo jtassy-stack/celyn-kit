@@ -18,7 +18,8 @@ let package = Package(
         .testTarget(
             name: "CelynKitTests",
             dependencies: ["CelynKit"],
-            path: "Tests/CelynKitTests"
+            path: "Tests/CelynKitTests",
+            exclude: ["Fixtures"]
         ),
     ]
 )
