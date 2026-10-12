@@ -46,6 +46,31 @@ let mine: MyEvent = try await client.get("events/abc")
 - Enums: `VenueType`, `OeuvreType`, `Sentiment` — all forward-compatible (unknown values decode to `.other` / `.mixed`).
 - Resource sugar: `client.events`, `client.venues`, `client.oeuvres`, `client.seances`, `client.recommendations`.
 
+## Quiz
+
+Daily quiz for Sirius, Keskonfé and Le Club (`client.quiz`). Decoding is tolerant: an unreadable question is dropped (never the lot), an unreadable citation becomes `nil`, unknown fields are ignored. Legacy and v2 share one model.
+
+```swift
+// 1. Fetch the day's lot (v2). `legacyDaily(app:date:)` returns the same model.
+let lot = try await client.quiz.lot(app: "sirius")            // or date: "2026-10-12"
+
+// 2. Play it: a pure value type, Codable so you can persist it and resume.
+var session = QuizSession(lot: lot)
+while let question = session.nextQuestion() {
+    let outcome = session.answer(questionId: question.id, choice: 0)  // .correct / .incorrect / .unscored / .rejected
+    _ = outcome
+}
+print(session.progress, session.score as Any)   // score is nil when the server withholds answerIndex
+// Sirius editions: session.blocks groups questions by edition.
+
+// 3. Report a wrong question (202/200 ok; QuizReportError.notFound / .tooManyReports).
+do {
+    try await client.quiz.report(id: question.id, reason: "Réponse contestable", deviceId: deviceUUID)
+} catch QuizReportError.tooManyReports { /* daily cap reached */ }
+```
+
+`client.quiz.story(id:)` returns the question attached to a news story (404 if none).
+
 ## Design notes
 
 - **No app state.** This package owns network + decoding. Caching, observability, view models live in the consuming app.
