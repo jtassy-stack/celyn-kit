@@ -44,6 +44,40 @@ final class CelynKitTests: XCTestCase {
         XCTAssertEqual(decoded, .other)
     }
 
+    func testSportVenueTypesDecode() throws {
+        let expected: [(String, VenueType)] = [
+            ("gym", .gym), ("pool", .pool), ("stadium", .stadium),
+            ("park", .park), ("track", .track), ("sports_centre", .sportsCentre),
+        ]
+        for (raw, type) in expected {
+            let decoded = try JSONDecoder().decode(VenueType.self, from: #""\#(raw)""#.data(using: .utf8)!)
+            XCTAssertEqual(decoded, type, raw)
+            XCTAssertEqual(type.rawValue, raw)
+        }
+    }
+
+    func testSportVenueDecodingKeepsGeofenceRadius() throws {
+        let json = """
+        {
+            "id": "v-gym",
+            "name": "Basic-Fit Republique",
+            "address": null,
+            "city": "Paris",
+            "latitude": 48.8566,
+            "longitude": 2.3522,
+            "venue_type": "gym",
+            "website": null,
+            "geofence_radius": 75,
+            "mention_count": 0
+        }
+        """.data(using: .utf8)!
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        let venue = try decoder.decode(Venue.self, from: json)
+        XCTAssertEqual(venue.venueType, .gym)
+        XCTAssertEqual(venue.geofenceRadius, 75)
+    }
+
     func testVenueDecodingFromAPIShape() throws {
         let json = """
         {

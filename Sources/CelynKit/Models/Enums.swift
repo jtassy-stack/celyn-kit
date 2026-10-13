@@ -10,6 +10,13 @@ public enum VenueType: String, Codable, Sendable, CaseIterable {
     case bookshop
     case bar
     case restaurant
+    // Sport venues (culture-api migration 0180, OSM directory).
+    case gym
+    case pool
+    case stadium
+    case park
+    case track
+    case sportsCentre = "sports_centre"
     case other
 
     /// Decodes unknown future values to `.other` rather than failing.
