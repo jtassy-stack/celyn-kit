@@ -42,6 +42,25 @@ public struct NewsStorySource: Identifiable, Codable, Sendable, Hashable {
     }
 }
 
+/// How far a story's sources agree, from the server's consensus digest:
+/// `score` = confirmed facts / (confirmed facts + disputed points), 0...1.
+/// Absent when the story has no digest or fewer than 3 scored items.
+/// The figure to label « Convergence »; `confidenceScore` blends editorial
+/// weight, outlet count and age.
+public struct NewsStoryAgreement: Codable, Sendable, Hashable {
+    public let score: Double
+    public let confirmedFacts: Int
+    public let disputedPoints: Int
+    public let singleSourceFacts: Int
+
+    public init(score: Double, confirmedFacts: Int, disputedPoints: Int, singleSourceFacts: Int) {
+        self.score = score
+        self.confirmedFacts = confirmedFacts
+        self.disputedPoints = disputedPoints
+        self.singleSourceFacts = singleSourceFacts
+    }
+}
+
 public struct NewsStory: Identifiable, Codable, Sendable, Hashable {
     public let id: String
     public let title: String
@@ -56,6 +75,8 @@ public struct NewsStory: Identifiable, Codable, Sendable, Hashable {
     public let lastUpdateAt: Date
     public let status: String
     public let sources: [NewsStorySource]
+    /// nil when absent or malformed (never fails the story).
+    public let agreement: NewsStoryAgreement?
 
     public init(
         id: String,
@@ -68,7 +89,8 @@ public struct NewsStory: Identifiable, Codable, Sendable, Hashable {
         firstSeenAt: Date,
         lastUpdateAt: Date,
         status: String,
-        sources: [NewsStorySource] = []
+        sources: [NewsStorySource] = [],
+        agreement: NewsStoryAgreement? = nil
     ) {
         self.id = id
         self.title = title
@@ -81,6 +103,28 @@ public struct NewsStory: Identifiable, Codable, Sendable, Hashable {
         self.lastUpdateAt = lastUpdateAt
         self.status = status
         self.sources = sources
+        self.agreement = agreement
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, title, primaryKind, entityTokens, confidenceScore, eventCount
+        case sourceCount, firstSeenAt, lastUpdateAt, status, sources, agreement
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        title = try c.decode(String.self, forKey: .title)
+        primaryKind = try c.decodeIfPresent(NewsEventKind.self, forKey: .primaryKind)
+        entityTokens = try c.decode([String].self, forKey: .entityTokens)
+        confidenceScore = try c.decode(Double.self, forKey: .confidenceScore)
+        eventCount = try c.decode(Int.self, forKey: .eventCount)
+        sourceCount = try c.decode(Int.self, forKey: .sourceCount)
+        firstSeenAt = try c.decode(Date.self, forKey: .firstSeenAt)
+        lastUpdateAt = try c.decode(Date.self, forKey: .lastUpdateAt)
+        status = try c.decode(String.self, forKey: .status)
+        sources = try c.decode([NewsStorySource].self, forKey: .sources)
+        agreement = c.decodeLenient(NewsStoryAgreement.self, forKey: .agreement)
     }
 }
 
@@ -312,6 +356,8 @@ public struct NewsStoryDetail: Identifiable, Codable, Sendable, Equatable {
     public let furtherReading: [FurtherReadingItem]
     /// nil = absent (treat as `.standard`).
     public let furtherReadingPolicy: FurtherReadingPolicy?
+    /// Source agreement, see `NewsStoryAgreement`. nil when absent or malformed.
+    public let agreement: NewsStoryAgreement?
 
     public init(
         id: String,
@@ -332,7 +378,8 @@ public struct NewsStoryDetail: Identifiable, Codable, Sendable, Equatable {
         relatedStories: [NewsRelatedStory] = [],
         thread: [NewsThreadEpisode] = [],
         furtherReading: [FurtherReadingItem] = [],
-        furtherReadingPolicy: FurtherReadingPolicy? = nil
+        furtherReadingPolicy: FurtherReadingPolicy? = nil,
+        agreement: NewsStoryAgreement? = nil
     ) {
         self.id = id
         self.title = title
@@ -353,12 +400,13 @@ public struct NewsStoryDetail: Identifiable, Codable, Sendable, Equatable {
         self.thread = thread
         self.furtherReading = furtherReading
         self.furtherReadingPolicy = furtherReadingPolicy
+        self.agreement = agreement
     }
 
     private enum CodingKeys: String, CodingKey {
         case id, title, primaryKind, entityTokens, confidenceScore, eventCount
         case sourceCount, firstSeenAt, lastUpdateAt, status, sources, events, consensus
-        case concepts, context, relatedStories, thread, furtherReading, furtherReadingPolicy
+        case concepts, context, relatedStories, thread, furtherReading, furtherReadingPolicy, agreement
     }
 
     public init(from decoder: Decoder) throws {
@@ -382,6 +430,7 @@ public struct NewsStoryDetail: Identifiable, Codable, Sendable, Equatable {
         thread = c.decodeLossyArray(NewsThreadEpisode.self, forKey: .thread)
         furtherReading = c.decodeLossyArray(FurtherReadingItem.self, forKey: .furtherReading)
         furtherReadingPolicy = c.decodeLenient(FurtherReadingPolicy.self, forKey: .furtherReadingPolicy)
+        agreement = c.decodeLenient(NewsStoryAgreement.self, forKey: .agreement)
     }
 }
 
